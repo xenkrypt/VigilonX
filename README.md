@@ -1,84 +1,111 @@
-# VigilonX – SRE Control Plane for AutoModerator
+# VigilonX
 
-VigilonX is an advanced Reddit Devvit Application designed to serve as a professional Site Reliability Engineering (SRE) Control Plane for AutoModerator. By unifying the Devvit Mod Tool capabilities with a rich Custom Post Webview interface, VigilonX brings software engineering best practices—such as version control, visual rule diffing, team proposals, health scoring, concurrent edit leasing, incident response, and safe testing—directly into the subreddit moderation ecosystem.
+**The Site Reliability Engineering (SRE) Control Plane for Reddit AutoModerator.**
 
----
-
-## 🚀 Key Features
-
-*   **Version Control & Snapshots ("Git for AutoMod"):** Keep a tiered history of `auto`, `manual`, and `milestone` snapshots. Instantly compare changes with a rule-level visual diff engine.
-*   **Intelligent Validation & Guardrails:** Real-time client-side YAML parsing and linting (debounced at 500ms), plus a "Deep Validate" engine checking for logical flaws and specific AutoModerator quirks.
-*   **Operational Governance Modes:**
-    *   **Safe Mode:** Read-only mode with deploy/rollback actions locked.
-    *   **Standard Mode:** Live deployments enabled after all validation checks pass.
-    *   **Power Mode:** Re-activates advanced workflows (e.g., cross-subreddit sync and partial rollbacks).
-*   **Concurrently Edit Leasing:** Avoid merge conflicts with Redis-backed 15-minute edit leases indicating who is currently drafting edits.
-*   **Emergency Incident Response ("The RED Brake"):** Trigger an instantaneous fallback deployment to the last stable snapshot and freeze all further edits globally in one click.
-*   **Interactive Simulation & Sandbox:** Test draft rules against simulated Reddit items (Link Spam, Keyword Filters, Age/Karma gating) with honest confidence scoring.
-*   **Curated Pattern Wizard:** Pick from 8 verified community templates (like Age Gates or Spam Filters) to auto-inject flawless YAML configurations.
-*   **Algorithmic Health Grading:** Tracks config quality (A to F) across 6 different vectors and displays history through SVG sparklines.
-*   **Training Missions:** 3 localized interactive scenarios (Beginner, Intermediate, Advanced) teaching how to securely edit and secure AutoMod code.
+VigilonX elevates subreddit moderation to professional infrastructure standards. By providing a unified Devvit Application interface, it brings modern software engineering paradigms—version control, deterministic offline testing, semantic validation, and incident response—directly into the moderation ecosystem.
 
 ---
 
-## 🛠️ Architecture & Directory Layout
+## 📖 Overview
+
+AutoModerator is the backbone of Reddit community safety, but editing its configuration directly via plain-text wiki pages is a high-risk operation. A single malformed regex, a missing action reason, or a logical flaw can cause catastrophic, silent failures across an entire community. 
+
+VigilonX solves this by introducing a strict **Staging Pipeline**. Moderators author rules in a locally contained sandboxed environment, validate syntax offline, test edge cases against simulated payloads, and deploy to live infrastructure with confidence—knowing a one-click rollback is always available.
+
+## ✨ Core Capabilities
+
+### 🛡️ Version Control & Configuration Snapshots
+- **Continuous Snapshot Architecture**: VigilonX maintains an exhaustive, searchable history of your AutoModerator configurations. 
+- **Milestone Pinning**: Explicitly pin known-stable configurations as immutable milestones.
+- **Instant Rollback**: Recover from bad deployments instantly by reverting to any historical state. 
+- **Atomic Commits**: All updates to the active AutoModerator wiki are performed atomically via the Reddit Devvit API.
+- **Wiki Conflict Detection**: If a moderator edits the wiki externally via Old Reddit, VigilonX detects the revision mismatch and enforces a "Pull & Diff" resolution flow before allowing new deployments.
+
+### 🧪 Safe Staging, Validation & Testing
+- **Offline Rule Simulator (Tester)**: Simulate synthetic Reddit items (posts and comments) with granular attributes (account age, domain, flair) against your draft configuration to observe precise matching behavior offline.
+- **Semantic Guardrails**: Beyond standard YAML syntax linting, VigilonX parses the semantic intent of rules, surfacing warnings for unconstrained `remove` actions, missing documentation, and dangerously broad regex patterns.
+- **Quarantined State**: All edits occur strictly within a localized Draft state. Nothing touches production until explicit validation and deployment criteria are met.
+
+### 🚨 Operational Incident Response
+- **The FREEZE Protocol**: During active subreddit attacks (e.g., bot waves or coordinated spam), moderators can trigger a global deployment lock. This disables all write operations to the active configuration until the freeze is lifted by a senior operator.
+- **Safety Profiles**: Enforce strict deployment gating. 
+    - *Relaxed*: Minimal restrictions for rapid prototyping.
+    - *Standard*: Balanced safeguards requiring basic validation.
+    - *Strict*: Hard-gating that demands full Deep Validation and zero guardrail errors before deployment is unlocked.
+
+### 🏗️ Workflow Acceleration & Telemetry
+- **Configurable AI Generation**: Transform natural language operational requirements into formatted AutoModerator YAML. AI behavior is tightly controlled via operational profiles (*Conservative, Balanced, Aggressive*).
+- **Interactive Pattern Library**: Inject battle-tested, community-standard templates directly into your draft. 
+- **Algorithmic Health Grading**: Track configuration technical debt over time with a 6-factor algebraic health score, ensuring rules remain maintainable, performant, and correctly documented.
+
+---
+
+## 🚀 Getting Started
+
+VigilonX is a Devvit application designed to run seamlessly within the Reddit ecosystem.
+
+### Prerequisites
+- Node.js (v18+)
+- Devvit CLI installed globally (`npm install -g @devvit/cli`)
+- A test subreddit where you have full moderation configuration permissions.
+
+### Local Development
+
+1. **Clone & Install**
+   ```bash
+   git clone https://github.com/your-repo/VigilonX.git
+   cd VigilonX
+   npm install
+   ```
+
+2. **Run Type Checks**
+   Ensure all TypeScript compiles cleanly before deployment:
+   ```bash
+   npm run type-check
+   ```
+
+3. **Launch the Playtest Simulator**
+   Start the local Devvit environment connected to your test subreddit:
+   ```bash
+   devvit playtest r/YourTestSubreddit
+   ```
+
+### Production Deployment
+
+To deploy VigilonX to Reddit's production Devvit infrastructure:
+```bash
+devvit upload
+```
+
+---
+
+## 🏗️ Architecture & Stack
+
+VigilonX operates on a decoupled architecture, isolating the Reddit API communication layer from the heavy lifting of the webview interface.
 
 ```text
 VigilonX/
 ├── src/
-│   ├── main.tsx          # Backend: Devvit Blocks & Redis API Gateway
-│   └── message.ts        # Protocols: Discriminated unions for Webview communication
-├── webroot/
-│   ├── page.html          # Webview DOM & Modals
-│   ├── script.js          # App Controller / Frontend State Manager
-│   ├── style.css          # Design System & Theming (True Dark/Light)
-│   ├── yaml-parser.js     # Bespoke AutoMod YAML AST parser
-│   ├── validation.js      # Syntactic validation & parser interfaces
-│   ├── guardrails.js      # Semantic linter / best practices engine
-│   ├── rule-tester.js     # Offline AutoMod simulator engine
-│   ├── diff-engine.js     # Rule-level YAML comparative engine
-│   ├── health-score.js    # 6-factor grading and SVG chart generator
-│   ├── pattern-library.js # Community rule templates and generator UI
-│   └── training.js        # Educational mission state tracker
-├── devvit.yaml            # Devvit project manifest
-├── package.json           # npm dependencies & configurations
-├── tsconfig.json          # TS compiler rules
-└── PROJECT_DESCRIPTION.md # Exhaustive technical architecture reference
+│   ├── main.tsx             # Devvit Blocks, UI Splash Screen & API Gateway
+│   └── message.ts           # Discriminated union protocols for Webview messaging
+├── webroot/                 # Vanilla JS/CSS Webview Payload
+│   ├── script.js            # Frontend State Controller & Lifecycle management
+│   ├── style.css            # Custom Design System (Glassmorphism, Dark Mode)
+│   ├── validation.js        # Syntactic Validation Engine (YAML AST parsing)
+│   ├── rule-tester.js       # Offline Simulation Engine
+│   ├── guardrails.js        # Semantic Linter & Health Grader
+│   └── page.html            # Core Webview DOM
+└── devvit.yaml              # App Manifest & Infrastructure configuration
 ```
 
 ---
 
-## ⚡ Development & Playtesting
+## 📚 Documentation
 
-### 1. Installation
-Install project dependencies:
-```bash
-npm install
-```
-
-### 2. Run Local Type Checks
-Ensure TypeScript compiles with zero errors before packaging:
-```bash
-npm run type-check
-```
-*Or directly via TypeScript compiler:*
-```bash
-npx tsc --noEmit
-```
-
-### 3. Launch Local Playtest
-Start the Devvit simulator to test the application on a target subreddit:
-```bash
-npx devvit playtest r/YourSubreddit
-```
-
-### 4. Deploy to Reddit
-Upload and activate the application on Reddit's production Devvit infrastructure:
-```bash
-npx devvit upload
-```
+For a comprehensive breakdown of operational workflows, including disaster recovery, health scoring rubrics, and the rule simulation engine, please read the [Operational Guide](OPERATIONAL_GUIDE.md).
 
 ---
 
 ## 🔒 The Prime Directive
-**VigilonX** is built with a non-negotiable core guarantee: *It will never lose, silently corrupt, or accidentally overwrite your active AutoModerator configuration.*
+
+VigilonX operates under a strict, non-negotiable guarantee: **It will never lose, silently corrupt, or accidentally overwrite your active AutoModerator configuration.** Every change is tracked, and every deployment can be reversed.

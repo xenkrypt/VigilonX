@@ -2,9 +2,9 @@
 
 ## 1. Project Overview & Philosophy
 
-VigilonX is an advanced Reddit Devvit Application architected to serve as a professional Site Reliability Engineering (SRE) Control Plane for AutoModerator. Managing complex AutoModerator rules via plain text wiki pages is fraught with risks: typos can cause catastrophic community disruptions, and there is no native support for staging, linting, testing, or peer review. 
+VigilonX is an advanced Reddit Devvit Application architected to serve as a professional Site Reliability Engineering (SRE) Control Plane for AutoModerator. Managing complex AutoModerator rules via plain text wiki pages is fraught with risks: typos can cause catastrophic community disruptions, and there is no native support for staging, linting, testing, or automated incident response. 
 
-By unifying the Devvit Mod Tool capabilities with a rich Custom Post Webview interface, VigilonX brings enterprise-grade software engineering practices—version control, visual rule diffing, team proposals, health scoring, concurrent edit leasing, incident response, and safe testing—directly into the subreddit moderation ecosystem.
+By unifying the Devvit Mod Tool capabilities with a rich Custom Post Webview interface, VigilonX brings enterprise-grade software engineering practices—version control, visual rule diffing, offline rule simulation, health scoring, and safe staging environments—directly into the subreddit moderation ecosystem.
 
 **The Prime Directive:** VigilonX is engineered with a non-negotiable core guarantee: *It will never lose, silently corrupt, or accidentally overwrite your active AutoModerator configuration.*
 
@@ -13,142 +13,88 @@ By unifying the Devvit Mod Tool capabilities with a rich Custom Post Webview int
 ## 2. Exhaustive Feature Matrix
 
 ### A. Version Control & Snapshot Engine ("Git for Automod")
-*   **Tiered Snapshots:** Every configuration state is saved as a snapshot, strictly categorized by `tier`:
-    *   **Auto:** Automatically generated before every deployment, rollback, or external sync.
-    *   **Manual:** explicitly created by a moderator with a custom note.
-    *   **Milestone:** Pinned configurations that represent known-stable states; these are never auto-pruned by retention policies.
-*   **Active Tracking:** The currently deployed configuration is dynamically flagged as `ACTIVE`.
-*   **Visual Diff Engine:** A built-in rule-by-rule visual diff system that compares any two configurations (Active vs Draft, Snapshot vs Active, etc.) highlighting exact YAML changes and partial merges.
-*   **Power Mode Partial Rollback:** In "Power Mode", rolling back allows selecting specific, isolated rule groups to revert rather than the entire configuration file.
+*   **Continuous Snapshotting:** Every time a deployment occurs, VigilonX securely archives the previous state as a snapshot.
+*   **Milestone Architecture:** Moderators can pin specific, known-stable configurations as "Milestones." These represent verified configurations that serve as critical fallback points during active subreddit attacks or emergencies.
+*   **Active Tracking:** The currently deployed configuration is dynamically fetched and flagged as `ACTIVE`, ensuring the local client state is perfectly aligned with the live subreddit wiki.
+*   **Wiki Conflict Detection:** If a configuration is edited externally via Old Reddit or the native Mod Tools, VigilonX detects the revision mismatch and triggers a mandatory "Pull & Diff" conflict resolution protocol, preventing unintentional overwrites.
+*   **Visual Diff Engine:** A robust comparative engine that visualizes exact YAML additions, deletions, and modifications between the Active config, the Draft config, and historical Snapshots.
 
-### B. Intelligent Draft Editor & Validation
-*   **Debounced Fast Linting:** Syntax validation runs on a 500ms debounce loop as you type, providing an inline error count without freezing the main UI thread.
-*   **Deep Validate (Guardrails Engine):** On-demand full semantic analysis that parses over 100 rules for structural integrity, type checking, and logical flaws (e.g., mismatched types, broad regexes causing backtracking).
-*   **Specific Constraint Enforcement:** The validator explicitly checks AutoMod quirks, such as requiring operator syntax (`< 1 days`) for the `account_age` property, and catching missing `action_reason` fields.
-*   **localStorage Crash Recovery:** Edits are silently autosaved to the browser's `localStorage`. Upon app reload or crash, a banner offers a one-click "Recover Unsaved Draft" action.
-*   **Edit Session Leasing:** Powered by Redis strings, opening a draft creates a 15-minute lease (pinged every 60 seconds). Other moderators opening the tool see a highly visible "Active Edit Session" warning indicating who is currently editing.
+### B. Intelligent Draft Editor & Validation Pipeline
+*   **Quarantined State:** All edits, whether manual or generated via AI or templates, are contained strictly within a local, sandboxed `Draft` state.
+*   **Deep Semantic Validation (Guardrails):** Beyond basic YAML syntax checking, VigilonX performs a full semantic analysis of AutoModerator logic. It actively detects unconstrained removal actions, dangerously broad regex patterns prone to catastrophic backtracking, and missing documentation.
+*   **Syntax & Typo Hardening:** The validation engine explicitly verifies AutoMod quirks, ensuring that variables like `account_age` use operator syntax (e.g., `< 1 days`) and that required rule keys are properly structured.
 
-### C. Operational Modes & Strict Governance
-*   **Three Operational Modes:**
-    *   **Safe Mode (Default):** Read-only environment. All deploy and rollback actions are hard-locked on both frontend and backend.
-    *   **Standard Mode:** Live deployments enabled, provided all validation checks pass.
-    *   **Power Mode:** Unlocks advanced workflows like Rule-Scope Partial Rollbacks and Cross-Subreddit feature syncs.
-*   **Config Freeze:** A master toggle that instantly blocks all `setConfig` operations globally. Displays a persistent red banner across all user interfaces until lifted.
-*   **Change Proposals:** Configs can be submitted as formal "Proposals". Includes a state machine transitioning through Draft → Proposed → Approved → Deployed/Rejected. Includes a mandatory Risk Assessment Checklist.
-*   **Approval Gates:** Require $N$ number of approvals before a Proposal can be deployed.
-*   **Policy Engine:** Enforces deployment prerequisites, such as requiring "Deep Validate" to run, or ensuring at least one Milestone snapshot exists in the history before allowing deployment.
+### C. Offline Simulation & Testing
+*   **Deterministic Rule Simulator:** A powerful offline testing engine that allows moderators to execute their active or drafted YAML rules against synthetic Reddit payloads.
+*   **Simulated Attributes:** Create complex testing scenarios by mocking parameters such as Author Karma, Account Age, Submission Domain, Text Body, and specific Post Flairs.
+*   **Feedback & Diagnostics:** The simulator outputs exact match results, indicating exactly which rules fired against the payload and which conditions failed, providing total confidence before deploying to production.
 
-### D. Simulation, Testing & Patterns
-*   **Interactive Simulator:** Test active or draft rules against simulated Reddit items across 5 archetypes (Link Spam, Keyword Filters, Age/Karma gating, Domain blocks, Flair enforcement).
-*   **Honest Confidence Scoring:** Simulating rules provides a `coverageFlag` (FULL/PARTIAL/NONE) and a calculated Confidence Percentage bar indicating how closely the test parameters match the rule's conditions.
-*   **Unsupported Flagging:** Explicit warnings (⚠️ not supported) are shown for fields the simulator cannot perfectly mimic (e.g., `is_edited`, `crosspost_*`), instead of silently ignoring them.
-*   **Curated Pattern Library:** 8 robust, community-verified rule templates (e.g., Age Gates, Spam Filters). Uses an interactive wizard to prompt the user for specific parameters (like minimum karma) and automatically injects the perfectly formatted YAML into the draft.
+### D. Incident Response & Safety Governance
+*   **The FREEZE Protocol:** A master emergency toggle that instantly locks the configuration pipeline globally. In the event of an Automod misconfiguration damaging the subreddit, a moderator can hit FREEZE to block any further deployments until the situation is resolved.
+*   **Deployment Safety Profiles:**
+    *   **Relaxed:** Minimal restrictions, optimized for rapid iteration.
+    *   **Standard:** Balanced safety that requires basic syntax validation to pass before deployment.
+    *   **Strict:** Hard-gating that demands a 100% clean Deep Validation run (zero guardrail warnings or semantic errors) before the Deploy button unlocks.
 
-### E. Health Telemetry & Education
-*   **Algorithmic Health Grading:** Grades configurations from A to F based on a weighted formula: Validation Cleanliness (30%), Action Diversity (15%), Documentation Coverage (15%), Safety Patterns (20%), Type Specificity (10%), and Rule Count Health (10%).
-*   **Sparkline History:** Visualizes the health trajectory across the last 15 deployments using an SVG chart.
-*   **Training Missions:** 3 localized, interactive scenarios (Beginner, Intermediate, Advanced) teaching moderators how to fix broken syntax, secure unsafe rules, and write from scratch. Progress is tracked via `localStorage`.
+### E. Health Telemetry & Workflow Acceleration
+*   **Algorithmic Health Grading:** Evaluates the technical debt of the entire AutoModerator configuration. It grades the configuration from A to F based on a weighted formula factoring in: Validation Cleanliness, Action Diversity, Documentation Coverage, Safety Patterns, and Rule Complexity.
+*   **AI Rule Compilation:** Transforms natural language requirements into perfectly formatted AutoModerator YAML. The AI operates under customizable behavioral profiles (Conservative, Balanced, Aggressive) to control the restrictiveness of the generated code.
+*   **Curated Pattern Library:** A built-in repository of battle-tested, community-verified rule templates (e.g., Advanced Age Gating, T-Shirt Spam Filters). Users can seamlessly inject these standardized patterns directly into their drafts.
 
 ### F. Premium UI/UX Ecosystem
-*   **Role-Based Theming & Glassmorphism:** Features a 7-panel architecture with deep frosted-glass backgrounds, glowing accents, and dynamic tab coloring (Teal, Amber, Purple, Pink).
-*   **True Dark/Light Mode:** Toggleable theme with zero-flash persistence.
-*   **Feather Icons & Tooltips:** High-res SVG icons with `z-index: 9999` positional tooltips to prevent modal clipping.
-*   **Toast System:** Auto-dismissing success and error notifications equipped with animated progress bars.
+*   **Cinematic Operational Interface:** Features a modular tab-based architecture with deep frosted-glass backgrounds, glowing accents, and an unapologetically infrastructure-oriented aesthetic.
+*   **Persistent UI States:** Customizable UI Density (Compact, Comfortable, Expanded) and Motion Effects (Off, Subtle, Full).
+*   **Toast System:** Non-blocking, auto-dismissing success and error telemetry notifications.
 
 ---
 
 ## 3. Core Workflows
 
 ### Workflow 1: The Deployment & Validation Lifecycle
-1.  **Load:** User opens the "Draft" tab. The system pulls either the `Active Config` or a `Recovered Draft`. A Redis lease is acquired and pinged every 60s.
-2.  **Edit:** User modifies YAML. The `yaml-parser.js` and `validation.js` run syntactical checks every 500ms.
-3.  **Validate:** User clicks "Deep Validate". The `guardrails.js` parses semantic meaning, surfacing warnings (e.g., "short includes string without includes-word") and errors.
-4.  **Policy Check:** The UI evaluates `this.settings.policyRules`. If Safe Mode is on, or Config Freeze is active, the Deploy button remains locked.
-5.  **Deploy:** Upon clicking deploy, the Devvit Backend intercepts the payload, runs a server-side permission check, creates an `auto` tier snapshot of the *current* state, updates the Reddit Wiki via `context.reddit.updateWikiPage()`, logs the deployment to the Audit Trail, and releases the Redis lease.
+1.  **Staging:** User navigates to the "Draft & Validate" tab.
+2.  **Edit:** The user modifies the YAML config.
+3.  **Validate:** The user clicks "Deep Validate". The validation engine parses semantic meaning, surfacing any architectural warnings.
+4.  **Policy Check:** The UI evaluates the selected Safety Profile. If Strict Mode is active and warnings exist, the deployment is hardware-locked.
+5.  **Deploy:** Upon successful validation, the system takes an atomic snapshot of the *current* state, updates the Reddit Wiki via the Devvit API, logs the deployment, and upgrades the Draft to ACTIVE.
 
-### Workflow 2: Team Proposal & Approval Pipeline
-1.  **Propose:** Instead of deploying directly, a user clicks "Submit Proposal".
-2.  **Assessment:** The user fills out a Proposal Title, Rationale, Risk Level (Low/Medium/High), and a checklist (e.g., "Affects Mod Actions").
-3.  **State Transition (Proposed):** The config is saved to the backend Proposal pool.
-4.  **Review & Diff:** Other moderators navigate to the "Proposals" tab, click "View Diff" to see exactly what this proposal changes against the active config.
-5.  **Approval Gate:** Moderators click "Approve". Once the approval count meets the required threshold (e.g., 2), the state transitions to `Approved`, unlocking the "Deploy" button.
-6.  **Resolution:** The Proposal is deployed (transitioning to `Deployed`) or denied (`Rejected`).
+### Workflow 2: Safe Iteration via Simulator
+1.  **Drafting:** A moderator writes a complex regex filter to block novel spam domains.
+2.  **Mocking:** They switch to the "Rule Tester" tab and configure a synthetic post mirroring the spam campaign.
+3.  **Execution:** Clicking "Run Test" parses the draft YAML locally without touching production, confirming if the rule successfully catches the mocked payload.
+4.  **Refinement:** If the rule misses, the moderator adjusts the draft and retests until perfect confidence is achieved.
 
 ### Workflow 3: Emergency Incident Response
-1.  **Crisis Identification:** A rogue Automod rule begins nuking legitimate posts.
-2.  **Emergency Brake:** A moderator clicks the high-visibility red "BRAKE" button in the header.
-3.  **Atomic Resolution:** In a single server-side transaction, VigilonX:
-    *   Finds the most recent `milestone` or `manual` snapshot.
-    *   Overwrites the live Wiki page with that stable config.
-    *   Toggles `configFreeze = true` in settings to prevent further damage.
-    *   Logs an `EMERGENCY_BRAKE` event to the immutable Audit Trail.
-4.  **Broadcast:** The UI instantly updates, showing the Config Freeze banner to all active sessions.
-
-### Workflow 4: Conflict Resolution & Sync
-1.  **External Edit:** A moderator edits the automod wiki directly on old.reddit.com, bypassing VigilonX.
-2.  **Detection:** Upon next load, VigilonX compares the stored `activeRevisionId` against the actual Reddit Wiki `revisionId`.
-3.  **Conflict Banner:** A severe warning banner is shown: "External Edit Detected".
-4.  **Resolution Options:** The user can click "Acknowledge & Fork" to ingest the external changes, automatically creating an `external-edit` labeled snapshot for auditing, and updating the internal tracker.
+1.  **Crisis Identification:** An aggressive Automod rule begins improperly removing legitimate user content.
+2.  **Emergency Brake:** A senior moderator hits the high-visibility "FREEZE" button.
+3.  **Containment:** The system broadcasts a Config Freeze lock to all active sessions, preventing any junior moderators from pushing panicked, untested fixes.
+4.  **Rollback:** The team navigates to the "Versions" tab, locates the last pinned Milestone snapshot, and executes a one-click atomic rollback to restore stability.
 
 ---
 
-## 4. Technical Architecture & Component Breakdown
+## 4. Technical Architecture
 
-### System Dependencies
-*   **Platform:** Reddit Devvit SDK (`@devvit/public-api` version `0.12.x`)
-*   **Communication:** `useWebView` hook coupled with a strict `postMessage` protocol utilizing typescript discriminated unions (`WebViewMessage` / `DevvitMessage`).
-*   **Storage:** Redis plugin (`@devvit/redis`) utilizing String keys for Session Leasing and Settings, and Sorted Sets (`zRange` with `by: 'rank'`) for time-series Snapshot and Audit indexing.
+### Platform & Dependencies
+*   **Platform:** Reddit Devvit SDK
+*   **Communication:** `useWebView` hook coupled with a strict bidirectional `postMessage` protocol.
+*   **Storage Framework:** Utilizes Devvit's internal storage primitives for reliable version snapshotting and telemetry tracking.
 
-### Backend Structure (`src/`)
-*   **`main.tsx` (55KB, ~1340 lines):** The brain of the operation. Contains:
-    *   `AutomodConfigService`: Manages Reddit API interactions, strict revision tracking, and conflict state. Catches Reddit's `special_errors` (Wiki syntax rejections).
-    *   `SnapshotService`: Handles tier-based snapshot rotation and storage.
-    *   `SettingsService` & `ProposalService`: Manages governance rules and proposal state machines.
-    *   `LeaseService`: Enforces concurrency control.
-*   **`message.ts` (12KB):** The TypeScript interface contract ensuring frontend-backend payload alignment.
+### Component Breakdown
+*   **`src/main.tsx`:** The core Devvit Block rendering the minimal operational splash screen and acting as the API Gateway for Reddit Wiki read/write operations.
+*   **`webroot/page.html`:** The DOM structure comprising the modular application architecture (Versions, Draft, Tester, Patterns, Health, Settings).
+*   **`webroot/script.js`:** The monolith SPA controller handling state management, DOM reconciliation, validation pipeline triggers, and UI interactivity.
+*   **`webroot/validation.js` & `guardrails.js`:** Custom client-side parsing engines capable of handling AutoModerator's bespoke YAML document structures and executing complex semantic analysis.
+*   **`webroot/rule-tester.js`:** The deterministic regex and condition evaluation engine powering the offline simulator.
+*   **`webroot/style.css`:** The custom design system providing the cinematic dark-mode aesthetic.
 
-### Frontend SPA (`webroot/`)
-*   **`page.html` (28KB):** DOM structure comprising the 7 panels (Draft, Versions, Simulator, Health, Patterns, Proposals, Settings) and 5 distinct Modals.
-*   **`script.js` (56KB, 1220+ lines):** The monolith SPA controller. Handles DOM manipulation, Theme persistence, Draft recovery (`localStorage`), Lease ping heartbeats, and UI state hydration.
-*   **`style.css` (26KB):** Complete custom styling engine implementing CSS variables, backdrop-filters for glassmorphism, responsive grid layouts, and dynamic severity color coding (e.g., `--danger`, `--warning`).
-*   **`yaml-parser.js` & `validation.js`:** Custom client-side parsing tree capable of handling AutoModerator's `---` document separators and array mappings without heavy Node.js YAML dependencies.
-*   **`rule-tester.js`:** The Simulation engine that maps user input (Author Age, Karma, Body Text) against parsed regex and string matching algorithms to return confidence scores.
-*   **`guardrails.js` & `health-score.js`:** Telemetry models containing the static analysis matrices and the 6-factor algebraic grading formulas.
+---
 
-## 5. File Directory Context
+## 5. Deployment Commands
 
-```
-VigilonX/
-├── src/
-│   ├── main.tsx          # Core Devvit Blocks & Redis API Gateway
-│   └── message.ts        # Bidirectional type definitions
-├── webroot/
-│   ├── page.html          # Webview DOM & Modals
-│   ├── script.js          # App Controller / State Manager
-│   ├── style.css          # Design System & Theming
-│   ├── yaml-parser.js     # Bespoke AutoMod YAML AST parser
-│   ├── validation.js      # Syntactic & Syntax validator
-│   ├── guardrails.js      # Semantic linter / best practices engine
-│   ├── rule-tester.js     # Offline AutoMod simulator
-│   ├── diff-engine.js     # Rule-level YAML comparative engine
-│   ├── health-score.js    # 6-factor grading and SVG chart generator
-│   ├── pattern-library.js # Community rule templates and generator UI
-│   ├── training.js        # Educational mission state tracker
-│   └── sample-config.yaml # Internal test fixture
-├── devvit.yaml            # Devvit configuration
-├── package.json           # npm dependencies
-├── tsconfig.json          # TS compiler rules
-├── devlog.md              # Historical development log
-├── ABOUT.md               # Project inspiration and narrative history
-└── PROJECT_DESCRIPTION.md # This exhaustive master reference document
-```
-
-## 6. Playtesting & Deployment
 ```bash
-# Ensure strict type compliance
+# Verify TypeScript compliance
 npm run type-check
 
-# Launch a local playtest against a test subreddit
+# Launch a local playtest against your test subreddit
 npx devvit playtest r/YourSubreddit
 
 # Push to Reddit's Devvit Infrastructure

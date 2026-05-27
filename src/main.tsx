@@ -1443,47 +1443,26 @@ Analyze the provided YAML and output the operational summary as pure text.`;
     });
 
     return (
-      <vstack grow padding="medium">
-        <vstack grow alignment="middle center">
-          <text size="xlarge" weight="bold">
+      <zstack grow alignment="center middle" backgroundColor="#050505">
+        {/* Placeholder for the provided GIF background */}
+        {/* <image url="URL_TO_YOUR_GIF" imageWidth="100%" imageHeight="100%" resizeMode="cover" /> */}
+        
+        {/* Dark overlay for readability */}
+        <vstack width="100%" height="100%" backgroundColor="rgba(0,0,0,0.7)" />
+
+        <vstack alignment="center middle" gap="medium">
+          <text size="xxlarge" weight="bold" color="#ffffff">
             VigilonX
           </text>
-          <spacer size="xsmall" />
-          <text size="small" color="neutral-content-weak">
-            Automod Configuration Lab
+          <text size="small" color="#00ffd9">
+            Operational Control Plane
           </text>
-          <spacer size="medium" />
-          <hstack gap="small" alignment="middle center">
-            <vstack padding="small" cornerRadius="small" backgroundColor="neutral-background-hover">
-              <text size="small" weight="bold">Versions</text>
-              <text size="xsmall" color="neutral-content-weak">Snapshot &amp; rollback</text>
-            </vstack>
-            <vstack padding="small" cornerRadius="small" backgroundColor="neutral-background-hover">
-              <text size="small" weight="bold">Validate</text>
-              <text size="xsmall" color="neutral-content-weak">Syntax &amp; rule checks</text>
-            </vstack>
-          </hstack>
-          <spacer size="small" />
-          <hstack gap="small" alignment="middle center">
-            <vstack padding="small" cornerRadius="small" backgroundColor="neutral-background-hover">
-              <text size="small" weight="bold">Test</text>
-              <text size="xsmall" color="neutral-content-weak">Simulate rule matches</text>
-            </vstack>
-            <vstack padding="small" cornerRadius="small" backgroundColor="neutral-background-hover">
-              <text size="small" weight="bold">Deploy</text>
-              <text size="xsmall" color="neutral-content-weak">Safe config updates</text>
-            </vstack>
-          </hstack>
           <spacer size="large" />
           <button appearance="primary" onPress={() => webView.mount()}>
             Open Automod Lab
           </button>
-          <spacer size="small" />
-          <text size="xsmall" color="neutral-content-weak">
-            Safe change management for your subreddit
-          </text>
         </vstack>
-      </vstack>
+      </zstack>
     );
   },
 });

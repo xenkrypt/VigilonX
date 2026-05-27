@@ -836,55 +836,6 @@ class VigilonXApp {
       this.applySafetyProfile(e.target.value);
     });
     
-    // Bind Reset Workspace
-    const btnReset = document.getElementById('btn-reset-workspace');
-    if (btnReset) {
-      btnReset.addEventListener('click', () => {
-        if (confirm('Clear temporary workspace state and reset session? This will not affect live deployments.')) {
-           this.clearLocalDraft();
-           this.currentDraftYaml = '';
-           document.getElementById('yaml-editor').value = '';
-           this.updateDraftInfo();
-           this.runValidation(false);
-           
-           // Clear tester inputs
-           document.getElementById('test-title').value = '';
-           document.getElementById('test-body').value = '';
-           document.getElementById('test-domain').value = '';
-           document.getElementById('test-author').value = '';
-           document.getElementById('test-age').value = '30';
-           document.getElementById('test-karma').value = '100';
-           document.getElementById('test-flair').value = '';
-           document.getElementById('test-self').checked = true;
-           document.getElementById('test-results').innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span class="title">No test run yet</span><span class="desc">Configure a test item and click Run Test</span></div>`;
-           
-           // Clear AI outputs
-           const aiOutput = document.getElementById('ai-explain-output');
-           if (aiOutput) {
-             aiOutput.style.display = 'none';
-             aiOutput.textContent = '';
-           }
-           const aiPrompt = document.getElementById('ai-prompt-input');
-           if (aiPrompt) aiPrompt.value = '';
-           const aiError = document.getElementById('ai-error-output');
-           if (aiError) {
-             aiError.style.display = 'none';
-             aiError.textContent = '';
-           }
-           
-           // Reset validation
-           this.lastValidation = null;
-           this.lastDeepValidation = null;
-           this.hasRunTests = false;
-           document.getElementById('draft-source-label').textContent = 'No draft loaded';
-           document.getElementById('validation-status').textContent = 'Not validated';
-           document.getElementById('validation-status').className = 'vld-status';
-           document.getElementById('validation-list').innerHTML = '';
-           
-           this.toast('Workspace reset successfully.');
-        }
-      });
-    }
   }
 
   // ---- Apply Settings Methods ----
