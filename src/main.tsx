@@ -17,8 +17,6 @@ import type {
   AppSettings,
   EditSessionLease,
   Pattern,
-  Proposal,
-  ProposalComment,
   RuleDoc,
   AuditEntry,
 } from './message.js';
@@ -59,8 +57,6 @@ const SNAPSHOT_INDEX_KEY = 'vigilonx:snapshot_index';
 const DEPLOY_EVENT_PREFIX = 'vigilonx:deploy:';
 const DEPLOY_EVENT_INDEX_KEY = 'vigilonx:deploy_index';
 const SETTINGS_KEY = 'vigilonx:settings';
-const PROPOSAL_PREFIX = 'vigilonx:proposal:';
-const PROPOSAL_INDEX_KEY = 'vigilonx:proposal_index';
 const PATTERN_PREFIX = 'vigilonx:pattern:';
 const PATTERN_INDEX_KEY = 'vigilonx:pattern_index';
 const RULEDOC_PREFIX = 'vigilonx:ruledoc:';
@@ -480,44 +476,6 @@ async function saveSettings(context: Devvit.Context, settings: AppSettings): Pro
 }
 
 // ---------------------------------------------------------------------------
-// Service: ProposalService
-// ---------------------------------------------------------------------------
-
-async function createProposal(context: Devvit.Context, data: { title: string; description: string; rationale: string; riskLevel: 'low'|'medium'|'high'; configYaml: string }, author: string): Promise<Proposal> {
-  const proposal: Proposal = {
-    id: generateId(), title: data.title, description: data.description,
-    rationale: data.rationale, riskLevel: data.riskLevel, configYaml: data.configYaml,
-    author, timestamp: new Date().toISOString(), status: 'proposed',
-    approvals: [], comments: [],
-  };
-  await context.redis.set(`${PROPOSAL_PREFIX}${proposal.id}`, JSON.stringify(proposal));
-  await context.redis.zAdd(PROPOSAL_INDEX_KEY, { member: proposal.id, score: Date.now() });
-  return proposal;
-}
-
-async function listProposals(context: Devvit.Context): Promise<Proposal[]> {
-  const ids = await context.redis.zRange(PROPOSAL_INDEX_KEY, 0, -1, { reverse: true, by: 'rank' });
-  if (!ids || ids.length === 0) return [];
-  const proposals: Proposal[] = [];
-  for (const entry of ids) {
-    const id = typeof entry === 'string' ? entry : entry.member;
-    const raw = await context.redis.get(`${PROPOSAL_PREFIX}${id}`);
-    if (raw) { try { proposals.push(JSON.parse(raw) as Proposal); } catch { /* skip */ } }
-  }
-  return proposals;
-}
-
-async function getProposal(context: Devvit.Context, id: string): Promise<Proposal | null> {
-  const raw = await context.redis.get(`${PROPOSAL_PREFIX}${id}`);
-  if (!raw) return null;
-  try { return JSON.parse(raw) as Proposal; } catch { return null; }
-}
-
-async function updateProposal(context: Devvit.Context, proposal: Proposal): Promise<void> {
-  await context.redis.set(`${PROPOSAL_PREFIX}${proposal.id}`, JSON.stringify(proposal));
-}
-
-// ---------------------------------------------------------------------------
 // Service: CommunityPatternService
 // ---------------------------------------------------------------------------
 
@@ -667,7 +625,6 @@ Devvit.addCustomPostType({
                 deployEvents, 
                 settings, 
                 lastKnownRevisionId,
-                proposals,
                 patterns,
                 auditEntries,
                 archives,
@@ -679,7 +636,6 @@ Devvit.addCustomPostType({
                 listDeployEvents(context).catch((): DeployEvent[] => []),
                 getSettings(context).catch(() => DEFAULT_SETTINGS),
                 context.redis.get(LAST_KNOWN_REVISION_KEY).catch(() => undefined),
-                listProposals(context).catch((): Proposal[] => []),
                 listCommunityPatterns(context).catch((): Pattern[] => []),
                 listAuditEntries(context).catch((): AuditEntry[] => []),
                 listArchives(context).catch((): SnapshotArchive[] => []),
@@ -712,7 +668,6 @@ Devvit.addCustomPostType({
                   snapshots, 
                   deployEvents,
                   settings,
-                  proposals,
                   patterns,
                   permissions,
                   auditEntries,
@@ -1132,102 +1087,6 @@ Devvit.addCustomPostType({
             }
 
             // ----------------------------------------------------------
-            // Proposals
-            // ----------------------------------------------------------
-            case 'listProposals': {
-              const proposals = await listProposals(context);
-              webView.postMessage({ type: 'proposalListResult', data: { proposals } });
-              break;
-            }
-            case 'createProposal': {
-              const pPerms = await checkPermissions(context);
-              if (!pPerms.canView) { webView.postMessage({ type: 'error', data: { message: 'No permission.', context: 'createProposal' } }); break; }
-              const proposal = await createProposal(context, message.data, pPerms.username);
-              await recordAudit(context, 'proposal', pPerms.username, `Proposal created: ${proposal.title}`);
-              webView.postMessage({ type: 'proposalCreated', data: { proposal } });
-              break;
-            }
-            case 'approveProposal': {
-              const aPerms = await checkPermissions(context);
-              if (!aPerms.canEdit) { webView.postMessage({ type: 'error', data: { message: 'No permission.', context: 'approveProposal' } }); break; }
-              const ap = await getProposal(context, message.data.proposalId);
-              if (!ap) { webView.postMessage({ type: 'error', data: { message: 'Proposal not found.', context: 'approveProposal' } }); break; }
-              if (!ap.approvals.includes(aPerms.username)) ap.approvals.push(aPerms.username);
-              const stg = await getSettings(context);
-              if (stg.requireApprovals && ap.approvals.length >= stg.requiredApprovalCount) ap.status = 'approved';
-              else if (!stg.requireApprovals) ap.status = 'approved';
-              await updateProposal(context, ap);
-              webView.postMessage({ type: 'proposalUpdated', data: { proposal: ap } });
-              break;
-            }
-            case 'rejectProposal': {
-              const rPerms = await checkPermissions(context);
-              if (!rPerms.canEdit) { webView.postMessage({ type: 'error', data: { message: 'No permission.', context: 'rejectProposal' } }); break; }
-              const rp = await getProposal(context, message.data.proposalId);
-              if (!rp) { webView.postMessage({ type: 'error', data: { message: 'Proposal not found.', context: 'rejectProposal' } }); break; }
-              rp.status = 'rejected';
-              await updateProposal(context, rp);
-              webView.postMessage({ type: 'proposalUpdated', data: { proposal: rp } });
-              break;
-            }
-            case 'addProposalComment': {
-              const cPerms = await checkPermissions(context);
-              if (!cPerms.canView) { webView.postMessage({ type: 'error', data: { message: 'No permission.', context: 'addProposalComment' } }); break; }
-              const cp = await getProposal(context, message.data.proposalId);
-              if (!cp) { webView.postMessage({ type: 'error', data: { message: 'Proposal not found.', context: 'addProposalComment' } }); break; }
-              cp.comments.push({ id: generateId(), author: cPerms.username, timestamp: new Date().toISOString(), text: message.data.text });
-              await updateProposal(context, cp);
-              webView.postMessage({ type: 'proposalUpdated', data: { proposal: cp } });
-              break;
-            }
-            case 'deployProposal': {
-              const dpPerms = await checkPermissions(context);
-              if (!dpPerms.canEdit) { webView.postMessage({ type: 'error', data: { message: 'No permission.', context: 'deployProposal' } }); break; }
-              const dp = await getProposal(context, message.data.proposalId);
-              if (!dp) { webView.postMessage({ type: 'error', data: { message: 'Proposal not found.', context: 'deployProposal' } }); break; }
-              const stgs = await getSettings(context);
-              if (stgs.requireApprovals && dp.approvals.length < stgs.requiredApprovalCount) {
-                webView.postMessage({ type: 'error', data: { message: `Needs ${stgs.requiredApprovalCount} approval(s), has ${dp.approvals.length}.`, context: 'deployProposal' } }); break;
-              }
-              const proposalLock = await acquireDeployLock(context, dpPerms.username);
-              if (!proposalLock) {
-                webView.postMessage({ type: 'error', data: { message: 'Another deployment is in progress. Please wait a moment and try again.', context: 'deployProposal' } });
-                break;
-              }
-              try {
-              // Deploy the proposal config
-              const { content: liveConfig2, revisionId: liveRevisionId2 } = await getCurrentConfigWithRevision(context);
-              const lastKnownRevisionId2 = await context.redis.get(LAST_KNOWN_REVISION_KEY);
-              if (liveRevisionId2 && lastKnownRevisionId2 && liveRevisionId2 !== lastKnownRevisionId2) {
-                webView.postMessage({
-                  type: 'error',
-                  data: {
-                    message: 'Conflict Detected: The live AutoModerator config was edited externally. Please review the external changes in the Versions tab before deploying this proposal.',
-                    context: 'deployProposal',
-                  },
-                });
-                break;
-              }
-              let prevSnapId2: string | null = null;
-              if (liveConfig2.trim()) {
-                const preDeploy = await createSnapshot(context, liveConfig2, dpPerms.username, 'Auto-snapshot before proposal deploy', false, 'auto');
-                prevSnapId2 = preDeploy.id;
-              }
-              await setConfig(context, dp.configYaml, `Proposal deploy: ${dp.title}`);
-              const newSnap2 = await createSnapshot(context, dp.configYaml, dpPerms.username, `Proposal: ${dp.title}`, true, 'manual');
-              await markSnapshotActive(context, newSnap2.id);
-              const de2 = await recordDeployEvent(context, dpPerms.username, prevSnapId2, newSnap2.id, `Proposal: ${dp.title}`);
-              dp.status = 'deployed';
-              await updateProposal(context, dp);
-              await recordAudit(context, 'deploy', dpPerms.username, `Proposal deployed: ${dp.title}`, newSnap2.id);
-              webView.postMessage({ type: 'deployComplete', data: { snapshot: newSnap2, deployEvent: de2 } });
-              } finally {
-                await releaseDeployLock(context, proposalLock);
-              }
-              break;
-            }
-
-            // ----------------------------------------------------------
             // Community Patterns
             // ----------------------------------------------------------
             case 'listCommunityPatterns': {
@@ -1325,6 +1184,7 @@ Devvit.addCustomPostType({
               const brakeSettings = await getSettings(context);
               brakeSettings.configFreeze = true;
               await context.redis.set(SETTINGS_KEY, JSON.stringify(brakeSettings));
+              webView.postMessage({ type: 'settingsUpdated', data: { settings: brakeSettings } });
               
               // 2. Find last stable snapshot (milestone > manual > previous non-active)
               const allSnaps = await listSnapshots(context);
@@ -1343,10 +1203,9 @@ Devvit.addCustomPostType({
                 await recordAudit(context, 'rollback', brakePerms.username, `Emergency Brake deployed. Rolled back to ${lastStable.id}`, lastStable.id);
                 
                 const brakeSubreddit = await context.reddit.getCurrentSubreddit();
-                const [updatedSnapshots, updatedDeployEvents, updatedProposals, updatedPatterns, updatedAudit, updatedArchives] = await Promise.all([
+                const [updatedSnapshots, updatedDeployEvents, updatedPatterns, updatedAudit, updatedArchives] = await Promise.all([
                   listSnapshots(context).catch((): Snapshot[] => []),
                   listDeployEvents(context).catch((): DeployEvent[] => []),
-                  listProposals(context).catch((): Proposal[] => []),
                   listCommunityPatterns(context).catch((): Pattern[] => []),
                   listAuditEntries(context).catch((): AuditEntry[] => []),
                   listArchives(context).catch((): SnapshotArchive[] => []),
@@ -1360,7 +1219,6 @@ Devvit.addCustomPostType({
                   snapshots: updatedSnapshots, 
                   deployEvents: updatedDeployEvents,
                   settings: brakeSettings,
-                  proposals: updatedProposals,
                   patterns: updatedPatterns,
                   permissions: brakePerms,
                   auditEntries: updatedAudit,
@@ -1369,8 +1227,8 @@ Devvit.addCustomPostType({
                 } });
               } else {
                 const message = allSnaps.length === 1
-                  ? 'Only the current active snapshot exists. Emergency Brake enabled Config Freeze, but there is no earlier stable snapshot to rollback to.'
-                  : 'No stable snapshot exists to rollback to. Take a manual or milestone snapshot of a known-good config first.';
+                  ? 'Only the current active snapshot exists. Config Frozen, but there is no earlier stable snapshot to rollback to.'
+                  : 'No stable snapshot exists to rollback to. Config Frozen.';
                 webView.postMessage({ type: 'error', data: { message, context: 'emergencyBrake' } });
               }
               break;
@@ -1400,18 +1258,56 @@ Devvit.addCustomPostType({
 
 RULES:
 - Output ONLY valid AutoModerator YAML. No markdown fences, no explanations, no commentary.
-- Every rule MUST start with --- on its own line (the YAML document separator).
-- Always include "action_reason" in every rule.
-- Default "moderators_exempt" to true unless the user explicitly asks otherwise.
+- Every rule MUST start with --- on its own line.
+- Always include "action_reason" that concisely explains the action.
+- Always set "moderators_exempt: true".
 - Prefer safe defaults: use "filter" over "remove" when uncertain.
-- Avoid overly broad regex patterns (e.g. ".*" or ".+").
-- Avoid single-character string matches.
-- Use "includes-word" instead of "includes" when matching keywords to avoid substring false positives.
-- Each rule must specify a "type" (submission, comment, or any).
-- Output clean, production-ready YAML only.`;
+- Avoid overly broad regex patterns. Use "includes-word" for keyword matching.
+- Generate realistic, production-safe rules. Output clean YAML properly indented.`;
+
+              // Deterministic Templates
+              const promptLower = aiPrompt.toLowerCase();
+              let preGenerated = '';
+              const daysMatch = promptLower.match(/(?:younger|newer) than (\d+) days?/);
+              const karmaMatch = promptLower.match(/less than (\d+) karma/);
+              
+              if (daysMatch && karmaMatch) {
+                preGenerated = `---
+type: any
+author:
+  account_age: "< ${daysMatch[1]} days"
+  combined_karma: "< ${karmaMatch[1]}"
+  is_contributor: false
+action: filter
+action_reason: "New account (<${daysMatch[1]}d, <${karmaMatch[1]}k) - Review required"
+moderators_exempt: true`;
+              } else if (promptLower.includes('filter profanity') || promptLower.includes('profanity filter')) {
+                preGenerated = `---
+type: any
+body+title (includes-word): ["fuck", "shit", "bitch", "asshole"]
+action: filter
+action_reason: "Profanity filtered"
+moderators_exempt: true`;
+              } else if (promptLower.includes('domain') && promptLower.includes('filter')) {
+                const domainMatch = promptLower.match(/([a-z0-9-]+\.[a-z]{2,})/i);
+                if (domainMatch) {
+                  preGenerated = `---
+type: submission
+domain: ["${domainMatch[1]}"]
+action: filter
+action_reason: "Filtered domain (${domainMatch[1]})"
+moderators_exempt: true`;
+                }
+              }
+
+              if (preGenerated) {
+                webView.postMessage({ type: 'aiGenerateResult', data: { yaml: preGenerated, success: true } });
+                break;
+              }
 
               try {
-                const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${aiModel || 'gemini-2.5-flash'}:generateContent?key=${aiKey}`, {
+                const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_20S')), 20000));
+                const fetchPromise = fetch(`https://generativelanguage.googleapis.com/v1beta/models/${aiModel || 'gemini-2.5-flash'}:generateContent?key=${aiKey}`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -1425,6 +1321,8 @@ RULES:
                     }
                   }),
                 });
+
+                const aiResponse = await Promise.race([fetchPromise, timeoutPromise]) as Response;
 
                 if (!aiResponse.ok) {
                   const errBody = await aiResponse.text().catch(() => '');
@@ -1451,7 +1349,7 @@ RULES:
                 webView.postMessage({ type: 'aiGenerateResult', data: { yaml: generatedYaml, success: true } });
               } catch (aiErr: unknown) {
                 const aiErrMsg = aiErr instanceof Error ? aiErr.message : String(aiErr);
-                const safeMsg = aiErrMsg.includes('aborted') ? 'Request timed out (25s). Try a simpler prompt.' : `AI request failed: ${aiErrMsg.substring(0, 200)}`;
+                const safeMsg = aiErrMsg === 'TIMEOUT_20S' ? 'AI request timed out. Try again.' : `AI request failed: ${aiErrMsg.substring(0, 200)}`;
                 webView.postMessage({ type: 'aiGenerateResult', data: { yaml: '', success: false, error: safeMsg } });
               }
               break;
@@ -1467,16 +1365,18 @@ RULES:
                 break;
               }
 
-              const explainSystemPrompt = `You are an expert on Reddit's AutoModerator. The user will provide AutoModerator YAML configuration. Explain what each rule does in plain English. For each rule:
-1. Summarize its purpose in one sentence.
-2. List what it matches (type, conditions).
-3. State the action taken.
-4. Note any potential risks or issues (overly broad matching, missing fields, etc.).
-
-Be concise and practical. Use numbered rules. Do not output YAML.`;
+              const explainSystemPrompt = `You are an automated diagnostic tool that explains AutoModerator YAML rules.
+RULES:
+1. Return ONLY concise, operational summaries of what the rules do.
+2. DO NOT use conversational AI phrasing like "Here is an explanation", "Certainly", or "This rule does X".
+3. DO NOT use markdown headings, bullets, bold text, or code fences.
+4. Output normal plain text only.
+5. Example format: "Filters submissions from accounts younger than 3 days with less than 10 karma. Logs the action using action_reason."
+Analyze the provided YAML and output the operational summary as pure text.`;
 
               try {
-                const exResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${explainModel || 'gemini-2.5-flash'}:generateContent?key=${explainKey}`, {
+                const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_20S')), 20000));
+                const fetchPromise = fetch(`https://generativelanguage.googleapis.com/v1beta/models/${explainModel || 'gemini-2.5-flash'}:generateContent?key=${explainKey}`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -1491,6 +1391,8 @@ Be concise and practical. Use numbered rules. Do not output YAML.`;
                   }),
                 });
 
+                const exResponse = await Promise.race([fetchPromise, timeoutPromise]) as Response;
+
                 if (!exResponse.ok) {
                   const status = exResponse.status;
                   let errMsg = `Gemini API error (${status})`;
@@ -1502,7 +1404,10 @@ Be concise and practical. Use numbered rules. Do not output YAML.`;
                 }
 
                 const exResult = await exResponse.json();
-                const explanation = exResult?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+                let explanation = exResult?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+
+                // Force strip any markdown
+                explanation = explanation.replace(/[*_#`~>]/g, '').trim();
 
                 if (!explanation) {
                   webView.postMessage({ type: 'aiExplainResult', data: { explanation: '', success: false, error: 'AI returned an empty explanation.' } });
@@ -1512,7 +1417,7 @@ Be concise and practical. Use numbered rules. Do not output YAML.`;
                 webView.postMessage({ type: 'aiExplainResult', data: { explanation, success: true } });
               } catch (exErr: unknown) {
                 const exErrMsg = exErr instanceof Error ? exErr.message : String(exErr);
-                const safeMsg = exErrMsg.includes('aborted') ? 'Request timed out (25s). Try with a shorter config.' : `AI request failed: ${exErrMsg.substring(0, 200)}`;
+                const safeMsg = exErrMsg === 'TIMEOUT_20S' ? 'AI request timed out. Try again.' : `AI request failed: ${exErrMsg.substring(0, 200)}`;
                 webView.postMessage({ type: 'aiExplainResult', data: { explanation: '', success: false, error: safeMsg } });
               }
               break;

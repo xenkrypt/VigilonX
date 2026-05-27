@@ -10,7 +10,6 @@ class VigilonXApp {
     this.snapshots = [];
     this.deployEvents = [];
     this.settings = {};
-    this.proposals = [];
     this.communityPatterns = [];
     this.auditEntries = [];
 
@@ -25,9 +24,9 @@ class VigilonXApp {
     this.leaseInterval = null;
     this.activeMission = null;
     this.subredditName = ''; // Populated from initialData, used to namespace localStorage
+    this.configFrozen = false; // Emergency brake state (session-level)
 
     // AI Assistance (session-only state)
-    this.aiEnabled = false;
     this.aiEnabled = false;
     this.aiApiKey = '';
     this.aiModel = 'gemini-2.5-flash';
@@ -40,7 +39,6 @@ class VigilonXApp {
     this.bindTesterTab();
     this.bindModals();
     this.bindSettingsTab();
-    this.bindProposalsTab();
     this.bindHealthTab();
     this.bindPatternsTab();
     this.bindEmergencyBrake();
@@ -77,18 +75,7 @@ class VigilonXApp {
         case 'rollback-snapshot':
           this.promptRollback(id);
           break;
-        case 'approve-proposal':
-          this.approveProposal(id);
-          break;
-        case 'deploy-proposal':
-          this.deployProposal(id);
-          break;
-        case 'reject-proposal':
-          this.rejectProposal(id);
-          break;
-        case 'view-proposal-diff':
-          this.viewProposalDiff(id);
-          break;
+
         case 'open-pattern':
           this.openPatternWizard(id);
           break;
@@ -140,7 +127,6 @@ class VigilonXApp {
         this.snapshots = msg.data.snapshots || [];
         this.deployEvents = msg.data.deployEvents || [];
         this.settings = msg.data.settings || {};
-        this.proposals = msg.data.proposals || [];
         this.communityPatterns = msg.data.patterns || [];
         this.auditEntries = msg.data.auditEntries || [];
         this.archives = msg.data.archives || [];
@@ -215,27 +201,8 @@ class VigilonXApp {
       case 'settingsUpdated':
         this.settings = msg.data.settings;
         this.renderSettings();
-        if (msg.type === 'settingsUpdated') this.toast('Settings saved');
         break;
       
-      case 'proposalListResult':
-        this.proposals = msg.data.proposals;
-        this.renderProposals();
-        break;
-      case 'proposalCreated':
-        this.proposals.unshift(msg.data.proposal);
-        this.renderProposals();
-        this.toast('Proposal created');
-        this.closeModals();
-        break;
-      case 'proposalUpdated':
-        const pi = this.proposals.findIndex(p => p.id === msg.data.proposal.id);
-        if (pi !== -1) {
-          this.proposals[pi] = msg.data.proposal;
-          this.renderProposals();
-        }
-        break;
-        
       case 'auditTrailResult':
         this.auditEntries = msg.data.entries;
         this.renderAudit();
@@ -259,6 +226,13 @@ class VigilonXApp {
       case 'error':
         this.toast('Error: ' + msg.data.message, true);
         this.closeModals();
+        if (msg.data.context === 'emergencyBrake') {
+           const btn = document.getElementById('btn-emergency-brake');
+           if (btn) {
+              btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> FREEZE`;
+              btn.disabled = false;
+           }
+        }
         break;
       case 'toast':
         this.toast(msg.data.message);
@@ -267,7 +241,9 @@ class VigilonXApp {
       // AI Assistance responses
       case 'aiGenerateResult':
         this.aiLoading = false;
+        this.aiCooldown = true;
         this.updateAIButtons();
+        setTimeout(() => { this.aiCooldown = false; this.updateAIButtons(); }, 3000);
         if (msg.data.success) {
           const editor = document.getElementById('yaml-editor');
           const existing = editor.value.trim();
@@ -286,7 +262,9 @@ class VigilonXApp {
 
       case 'aiExplainResult':
         this.aiLoading = false;
+        this.aiCooldown = true;
         this.updateAIButtons();
+        setTimeout(() => { this.aiCooldown = false; this.updateAIButtons(); }, 3000);
         if (msg.data.success) {
           const output = document.getElementById('ai-explain-output');
           output.textContent = msg.data.explanation;
@@ -502,29 +480,56 @@ class VigilonXApp {
         return;
       }
       
-      // Policy Rules Evaluation
+      // Safety Profile + Policy Rules Evaluation
+      const safetyProfile = this.settings.safetyProfile || 'standard';
+      
+      if (safetyProfile === 'readonly') {
+        this.toast('Safety Profile is Read-Only — deployments are disabled.', true);
+        return;
+      }
+      
+      if (this.configFrozen) {
+        this.toast('Config Freeze is active — all deployments are locked.', true);
+        return;
+      }
+
+      // Strict mode: always require deep validation
+      if (safetyProfile === 'strict' && (!this.lastDeepValidation || !this.lastDeepValidation.isValid)) {
+        this.toast('Strict Safety: Deep Validate must pass before deploying. Run full validation first.', true);
+        return;
+      }
+
+      // Policy rules (explicit checkboxes)
       if (this.settings.policyRules) {
         if (this.settings.policyRules.requireDeepValidate && !this.lastValidation) {
            this.toast('Policy Enforcement: You must run Deep Validate before deploying.', true);
            return;
         }
-        if (this.settings.policyRules.requireRecentMilestone) {
-           const hasMilestone = this.snapshots.some(s => s.tier === 'milestone');
-           if (!hasMilestone) {
-             this.toast('Policy Enforcement: Require at least 1 Milestone snapshot in history to deploy.', true);
-             return;
-           }
+      }
+      
+      // Strict mode: guardrails must pass
+      if (safetyProfile === 'strict' && typeof runGuardrails === 'function') {
+        const gr = runGuardrails(this.currentDraftYaml);
+        const hasErrors = gr.some(g => g.level === 'error');
+        if (hasErrors) {
+          this.toast('Strict Safety: All guardrail errors must be resolved before deploying.', true);
+          return;
         }
       }
 
-      if (this.settings.requireApprovals) {
-        document.getElementById('modal-proposal-create').classList.add('active');
-        document.getElementById('prop-desc').value = this.currentDraftYaml;
-      } else {
-        document.getElementById('modal-deploy').classList.add('active');
-        const ts = document.getElementById('modal-deploy-test-status');
-        ts.querySelector('svg').style.opacity = this.hasRunTests ? '1' : '0.3';
+      // Update the deploy modal checks
+      const vs = document.getElementById('modal-deploy-validate-status');
+      if (vs) {
+        const passedVal = this.lastValidation && this.lastValidation.isValid;
+        vs.innerHTML = passedVal ? '✅ Validate syntax passed' : '❌ Validate syntax failed or not run';
       }
+      const gs = document.getElementById('modal-deploy-guardrails-status');
+      if (gs) {
+        const gr = typeof runGuardrails === 'function' ? runGuardrails(this.currentDraftYaml) : { passed: true };
+        gs.innerHTML = gr.passed ? '✅ Enforce guardrails passed' : '❌ Enforce guardrails failed';
+      }
+
+      document.getElementById('modal-deploy').classList.add('active');
     });
   }
 
@@ -613,16 +618,16 @@ class VigilonXApp {
         btn.disabled = true;
         btn.textContent = 'Deploy Locked';
         hint.textContent = 'You need edit permissions to deploy.';
-      } else if (mode === 'safe' || this.settings.configFreeze) {
+      } else if (mode === 'safe' || this.configFrozen || (this.settings.safetyProfile === 'readonly')) {
         btn.disabled = true;
         btn.textContent = 'Deploy Locked';
-        hint.textContent = mode === 'safe' 
-          ? 'Safe Mode active — switch to Standard or Power mode in Settings.' 
-          : 'Config Freeze active — disable freeze in Settings.';
-      } else if (this.settings.requireApprovals) {
-        btn.disabled = false;
-        btn.textContent = 'Submit Proposal';
-        hint.textContent = 'Approval required before deploy.';
+        if (this.configFrozen) {
+          hint.textContent = 'Config Freeze active — all deployments are locked.';
+        } else if (this.settings.safetyProfile === 'readonly') {
+          hint.textContent = 'Safety Profile is Read-Only — deployments are disabled.';
+        } else {
+          hint.textContent = 'Safe Mode active — switch to Standard or Power mode in Settings.';
+        }
       } else {
         btn.disabled = false;
         btn.textContent = 'Deploy to Live';
@@ -798,49 +803,174 @@ class VigilonXApp {
       const newSettings = {
         operatingMode: document.getElementById('set-operating-mode').value,
         readOnlyMode: document.getElementById('set-operating-mode').value === 'safe',
-        requireApprovals: document.getElementById('set-require-approvals').checked,
-        requiredApprovalCount: Number(document.getElementById('set-approval-count').value) || 1,
-        sandboxSubreddits: document.getElementById('set-sandbox-subs').value.split(',').map(s => s.trim()).filter(Boolean),
         defaultStagedWindowHours: 0,
         retentionPolicies: this.settings.retentionPolicies || { system: 50, manual: 20, milestone: 0 },
-        ecosystemAwareness: {
-           aiAutomod: document.getElementById('set-ecosystem-ai').checked,
-           mirrorSync: document.getElementById('set-ecosystem-sync').checked
-        },
         crossSubFeatures: this.settings.crossSubFeatures || false,
-        configFreeze: document.getElementById('set-config-freeze').checked,
+        uiDensity: document.getElementById('set-ui-density').value,
+        motionEffects: document.getElementById('set-motion-effects').value,
+        safetyProfile: document.getElementById('set-safety-profile').value,
+        aiRuleStyle: document.getElementById('set-ai-rule-style').value,
         policyRules: {
-           requireDeepValidate: document.getElementById('set-policy-deep-validate').checked,
-           requireSandboxDeploy: document.getElementById('set-policy-sandbox').checked,
-           requireRecentMilestone: document.getElementById('set-policy-milestone').checked
+           requireDeepValidate: document.getElementById('set-policy-deep-validate').checked
         }
       };
+      this.settings = { ...this.settings, ...newSettings };
       this.send({ type: 'updateSettings', data: { settings: newSettings } });
+      this.applyAllSettings();
+      this.saveSettingsToLocal();
+      this.toast('Settings saved');
     });
+    
+    // Live-apply density on change
+    document.getElementById('set-ui-density').addEventListener('change', (e) => {
+      this.applyDensity(e.target.value);
+    });
+
+    // Live-apply motion on change
+    document.getElementById('set-motion-effects').addEventListener('change', (e) => {
+      this.applyMotion(e.target.value);
+    });
+
+    // Live-apply safety profile on change
+    document.getElementById('set-safety-profile').addEventListener('change', (e) => {
+      this.applySafetyProfile(e.target.value);
+    });
+    
+    // Bind Reset Workspace
+    const btnReset = document.getElementById('btn-reset-workspace');
+    if (btnReset) {
+      btnReset.addEventListener('click', () => {
+        if (confirm('Clear temporary workspace state and reset session? This will not affect live deployments.')) {
+           this.clearLocalDraft();
+           this.currentDraftYaml = '';
+           document.getElementById('yaml-editor').value = '';
+           this.updateDraftInfo();
+           this.runValidation(false);
+           
+           // Clear tester inputs
+           document.getElementById('test-title').value = '';
+           document.getElementById('test-body').value = '';
+           document.getElementById('test-domain').value = '';
+           document.getElementById('test-author').value = '';
+           document.getElementById('test-age').value = '30';
+           document.getElementById('test-karma').value = '100';
+           document.getElementById('test-flair').value = '';
+           document.getElementById('test-self').checked = true;
+           document.getElementById('test-results').innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span class="title">No test run yet</span><span class="desc">Configure a test item and click Run Test</span></div>`;
+           
+           // Clear AI outputs
+           const aiOutput = document.getElementById('ai-explain-output');
+           if (aiOutput) {
+             aiOutput.style.display = 'none';
+             aiOutput.textContent = '';
+           }
+           const aiPrompt = document.getElementById('ai-prompt-input');
+           if (aiPrompt) aiPrompt.value = '';
+           const aiError = document.getElementById('ai-error-output');
+           if (aiError) {
+             aiError.style.display = 'none';
+             aiError.textContent = '';
+           }
+           
+           // Reset validation
+           this.lastValidation = null;
+           this.lastDeepValidation = null;
+           this.hasRunTests = false;
+           document.getElementById('draft-source-label').textContent = 'No draft loaded';
+           document.getElementById('validation-status').textContent = 'Not validated';
+           document.getElementById('validation-status').className = 'vld-status';
+           document.getElementById('validation-list').innerHTML = '';
+           
+           this.toast('Workspace reset successfully.');
+        }
+      });
+    }
+  }
+
+  // ---- Apply Settings Methods ----
+  applyDensity(density) {
+    document.documentElement.setAttribute('data-density', density || 'comfortable');
+    try { localStorage.setItem('vigilonx_density', density || 'comfortable'); } catch(e) {}
+  }
+
+  applyMotion(motion) {
+    document.documentElement.setAttribute('data-motion', motion || 'subtle');
+    try { localStorage.setItem('vigilonx_motion', motion || 'subtle'); } catch(e) {}
+  }
+
+  applySafetyProfile(profile) {
+    const badge = document.getElementById('safety-profile-badge');
+    if (badge) {
+      if (this.configFrozen) {
+        badge.textContent = 'FROZEN';
+        badge.className = 'safety-badge frozen';
+        badge.style.display = 'inline-flex';
+      } else {
+        const labels = { relaxed: 'RELAXED', standard: 'STANDARD', strict: 'STRICT', readonly: 'READ-ONLY' };
+        badge.textContent = labels[profile] || profile.toUpperCase();
+        badge.className = `safety-badge ${profile || 'standard'}`;
+        badge.style.display = 'inline-flex';
+      }
+    }
+    // Update deploy gating in real time
+    if (this.lastValidation) {
+      this.runValidation(false);
+    }
+  }
+
+  applyAllSettings() {
+    this.applyDensity(this.settings.uiDensity);
+    this.applyMotion(this.settings.motionEffects);
+    this.applySafetyProfile(this.settings.safetyProfile);
+    this.updateModeBadge();
+    this.updateFreezeBanner();
+  }
+
+  saveSettingsToLocal() {
+    try {
+      localStorage.setItem('vigilonx_settings', JSON.stringify({
+        uiDensity: this.settings.uiDensity || 'comfortable',
+        motionEffects: this.settings.motionEffects || 'subtle',
+        safetyProfile: this.settings.safetyProfile || 'standard',
+        aiRuleStyle: this.settings.aiRuleStyle || 'balanced',
+        operatingMode: this.settings.operatingMode || 'safe'
+      }));
+    } catch(e) {}
+  }
+
+  restoreLocalSettings() {
+    try {
+      const raw = localStorage.getItem('vigilonx_settings');
+      if (raw) {
+        const saved = JSON.parse(raw);
+        // Only apply visual settings from localStorage; authoritative settings come from server
+        if (saved.uiDensity) this.applyDensity(saved.uiDensity);
+        if (saved.motionEffects) this.applyMotion(saved.motionEffects);
+        // Merge into settings so they show correctly in the dropdowns
+        this.settings = { ...this.settings, ...saved };
+      } else {
+        // Apply defaults
+        this.applyDensity('comfortable');
+        this.applyMotion('subtle');
+      }
+    } catch(e) {
+      this.applyDensity('comfortable');
+      this.applyMotion('subtle');
+    }
   }
 
   renderSettings() {
     document.getElementById('set-operating-mode').value = this.settings.operatingMode || 'safe';
-    document.getElementById('set-require-approvals').checked = !!this.settings.requireApprovals;
-    document.getElementById('set-approval-count').value = this.settings.requiredApprovalCount || 1;
-    document.getElementById('set-sandbox-subs').value = (this.settings.sandboxSubreddits || []).join(', ');
-    
-    if (this.settings.ecosystemAwareness) {
-       document.getElementById('set-ecosystem-ai').checked = !!this.settings.ecosystemAwareness.aiAutomod;
-       document.getElementById('set-ecosystem-sync').checked = !!this.settings.ecosystemAwareness.mirrorSync;
-    }
-    
-    document.getElementById('set-config-freeze').checked = !!this.settings.configFreeze;
+    document.getElementById('set-ui-density').value = this.settings.uiDensity || 'comfortable';
+    document.getElementById('set-motion-effects').value = this.settings.motionEffects || 'subtle';
+    document.getElementById('set-safety-profile').value = this.settings.safetyProfile || 'standard';
+    document.getElementById('set-ai-rule-style').value = this.settings.aiRuleStyle || 'balanced';
     
     if (this.settings.policyRules) {
        document.getElementById('set-policy-deep-validate').checked = !!this.settings.policyRules.requireDeepValidate;
-       document.getElementById('set-policy-sandbox').checked = !!this.settings.policyRules.requireSandboxDeploy;
-       document.getElementById('set-policy-milestone').checked = !!this.settings.policyRules.requireRecentMilestone;
     }
-
-    if (this.settings.configFreeze) {
-       this.showConfigFreezeWarning();
-    }
+    
+    this.applyAllSettings();
     
     const brakeBtn = document.getElementById('btn-emergency-brake');
     if (brakeBtn) {
@@ -849,7 +979,6 @@ class VigilonXApp {
   }
 
   showConfigFreezeWarning() {
-    // Use the static freeze-banner element added in page.html
     const banner = document.getElementById('freeze-banner');
     if (banner) banner.style.display = 'block';
   }
@@ -857,101 +986,75 @@ class VigilonXApp {
   bindEmergencyBrake() {
     const btn = document.getElementById('btn-emergency-brake');
     if (!btn) return;
+
     btn.addEventListener('click', () => {
-      if (confirm('EMERGENCY BRAKE: This will immediately rollback the active configuration to the last stable milestone, enable Config Freeze, and lock all deployments. Are you sure?')) {
-         btn.textContent = 'Pulling Brake...';
-         btn.disabled = true;
-         this.send({ type: 'emergencyBrake' });
+      // Generate random code and show custom modal
+      this._freezeCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      document.getElementById('freeze-code-display').textContent = this._freezeCode;
+      document.getElementById('freeze-code-input').value = '';
+      document.getElementById('freeze-code-error').style.display = 'none';
+      document.getElementById('freeze-code-input').classList.remove('error');
+      document.getElementById('btn-confirm-freeze').disabled = false;
+      document.getElementById('btn-confirm-freeze').textContent = 'Confirm Freeze';
+      document.getElementById('modal-freeze').classList.add('active');
+      setTimeout(() => document.getElementById('freeze-code-input').focus(), 100);
+    });
+
+    // Cancel button
+    document.getElementById('btn-cancel-freeze').addEventListener('click', () => {
+      document.getElementById('modal-freeze').classList.remove('active');
+    });
+
+    // Click overlay to close
+    document.getElementById('modal-freeze').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('modal-freeze')) {
+        document.getElementById('modal-freeze').classList.remove('active');
       }
     });
-  }
 
-  // ---- Proposals ----
-  bindProposalsTab() {
-    document.getElementById('btn-new-proposal').addEventListener('click', () => {
-      if (!this.currentDraftYaml.trim()) {
-        this.toast('Draft is empty. Write a config first to propose it.', true);
-        return;
-      }
-      document.getElementById('prop-desc').value = this.currentDraftYaml;
-      document.getElementById('modal-proposal-create').classList.add('active');
+    // Confirm button
+    document.getElementById('btn-confirm-freeze').addEventListener('click', () => {
+      this._attemptFreeze();
     });
 
-    document.getElementById('btn-cancel-prop').addEventListener('click', () => this.closeModals());
-    document.getElementById('btn-confirm-prop').addEventListener('click', () => {
-      this.getFreshDraftYaml();
-      const rationale = document.getElementById('prop-note').value;
-      const data = {
-        title: document.getElementById('prop-title').value,
-        description: rationale,
-        configYaml: this.currentDraftYaml,
-        rationale,
-        riskLevel: document.getElementById('prop-risk').value,
-        checklist: {
-          affectsModActions: document.getElementById('prop-chk-mod').checked,
-          interactsWithBots: document.getElementById('prop-chk-bot').checked
-        }
-      };
-      if (!data.title) { this.toast('Title is required', true); return; }
-      this.send({ type: 'createProposal', data });
-      this.closeModals();
+    // Enter key in input
+    document.getElementById('freeze-code-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this._attemptFreeze();
     });
   }
 
-  renderProposals() {
-    const c = document.getElementById('proposal-list');
-    if (!this.proposals || !this.proposals.length) {
-      c.innerHTML = '<div class="empty"><span class="title">No proposals yet</span><span class="desc">Create a proposal from your draft config</span></div>';
-      return;
-    }
-
-    const stColors = { draft: 'badge-blue', proposed: 'badge-yellow', approved: 'badge-green', rejected: 'badge-red', deployed: 'badge-green' };
-    const rColors = { low: 'badge-blue', medium: 'badge-yellow', high: 'badge-red' };
-
-    c.innerHTML = this.proposals.map(p => `
-      <div class="snap-item" style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div>
-            <strong>${this.esc(p.title)}</strong>
-            <span class="badge ${stColors[p.status] || 'badge-blue'}">${p.status.toUpperCase()}</span>
-            <span class="badge ${rColors[p.riskLevel] || 'badge-blue'}">${p.riskLevel} risk</span>
-          </div>
-          <div style="font-size:11px;color:var(--text-3);">${this.fmtTime(p.timestamp)}</div>
-        </div>
-        <div style="font-size:12px;color:var(--text-2);">${this.esc(this.truncate(p.description || p.rationale || 'No description provided.', 220))}</div>
-        <div style="font-size:11px;color:var(--text-3);">By u/${this.esc(p.author)} · Approvals: ${p.approvals.length}/${this.settings.requiredApprovalCount || 1}</div>
-        <div style="display:flex;gap:8px;margin-top:4px;">
-          ${p.status === 'proposed' || p.status === 'approved' ? `
-            ${this.permissions.canEdit && !p.approvals.includes(this.permissions.username) ? `<button class="btn btn-sm btn-primary" data-action="approve-proposal" data-id="${this.esc(p.id)}">Approve</button>` : ''}
-            ${p.status === 'approved' && this.permissions.canEdit ? `<button class="btn btn-sm btn-green" data-action="deploy-proposal" data-id="${this.esc(p.id)}">Deploy</button>` : ''}
-            ${this.permissions.canEdit ? `<button class="btn btn-sm btn-red" data-action="reject-proposal" data-id="${this.esc(p.id)}">Reject</button>` : ''}
-          ` : ''}
-          <button class="btn btn-sm" data-action="view-proposal-diff" data-id="${this.esc(p.id)}">View Diff</button>
-        </div>
-      </div>
-    `).join('');
-  }
-
-  approveProposal(id) { this.send({ type: 'approveProposal', data: { proposalId: id } }); }
-  rejectProposal(id) { this.send({ type: 'rejectProposal', data: { proposalId: id } }); }
-  deployProposal(id) {
-    const mode = this.settings.operatingMode || 'safe';
-    if (mode === 'safe') { this.toast('Cannot deploy proposals in Safe Mode.', true); return; }
-    if (this.settings.configFreeze) { this.toast('Config Freeze is active. Cannot deploy.', true); return; }
-    this.send({ type: 'deployProposal', data: { proposalId: id } });
-  }
-
-  viewProposalDiff(id) {
-    const p = this.proposals.find(x => x.id === id);
-    if (!p) return;
-    const diff = typeof computeRuleDiff === 'function' ? computeRuleDiff(this.activeConfig, p.configYaml) : null;
-    if (diff) {
-      document.getElementById('snapshot-view-title').textContent = `Diff: ${p.title}`;
-      document.getElementById('snapshot-view-meta').innerHTML = `Comparing proposal config against current active config.`;
-      document.getElementById('snapshot-view-content').innerHTML = renderDiffHtml(diff);
-      document.getElementById('modal-snapshot-view').classList.add('active');
+  _attemptFreeze() {
+    const input = document.getElementById('freeze-code-input');
+    const enteredCode = input.value.trim().toUpperCase();
+    
+    if (enteredCode === this._freezeCode) {
+      // Success — execute freeze
+      this.configFrozen = true;
+      document.getElementById('btn-confirm-freeze').disabled = true;
+      document.getElementById('btn-confirm-freeze').textContent = 'Freezing...';
+      document.getElementById('freeze-code-error').style.display = 'none';
+      
+      this.send({ type: 'emergencyBrake' });
+      
+      setTimeout(() => {
+        document.getElementById('modal-freeze').classList.remove('active');
+        this.showConfigFreezeWarning();
+        this.applySafetyProfile(this.settings.safetyProfile);
+        this.updateBrakeButton();
+        this.runValidation(false);
+        this.toast('Config Freeze activated — all deployments locked.');
+      }, 600);
+    } else {
+      // Wrong code
+      input.classList.add('error');
+      document.getElementById('freeze-code-error').style.display = 'block';
+      input.value = '';
+      input.focus();
+      setTimeout(() => input.classList.remove('error'), 400);
     }
   }
+
+
 
   // ---- Health & Audit ----
   bindHealthTab() {
@@ -1278,6 +1381,15 @@ class VigilonXApp {
     this.updateFreezeBanner();
     this.updateBrakeButton();
     this.restoreAISettings();
+    this.restoreLocalSettings();
+  }
+
+  renderProposals() {
+    // Stub — proposals feature placeholder. No-op if panel doesn't exist.
+    const panel = document.getElementById('proposals-list');
+    if (panel && !panel.children.length) {
+      panel.innerHTML = '<div class="empty"><span class="title">No proposals</span></div>';
+    }
   }
 
   updateModeBadge() {
@@ -1293,10 +1405,9 @@ class VigilonXApp {
   }
 
   updateFreezeBanner() {
-    // Use the static freeze-banner element from page.html
     const banner = document.getElementById('freeze-banner');
     if (!banner) return;
-    banner.style.display = this.settings.configFreeze ? 'block' : 'none';
+    banner.style.display = this.configFrozen ? 'block' : 'none';
   }
 
   updateTrainingIndicator() {
@@ -1311,10 +1422,16 @@ class VigilonXApp {
 
   updateBrakeButton() {
     const btn = document.getElementById('btn-emergency-brake');
-    if (btn) {
-      btn.style.display = this.permissions.canEdit ? 'flex' : 'none';
-      btn.textContent = 'BRAKE';
+    if (!btn) return;
+    btn.style.display = this.permissions.canEdit ? 'flex' : 'none';
+    if (this.configFrozen) {
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> FROZEN`;
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+    } else {
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> FREEZE`;
       btn.disabled = false;
+      btn.style.opacity = '1';
     }
   }
 
@@ -1415,13 +1532,27 @@ class VigilonXApp {
         generateBtn.addEventListener('click', () => {
           const prompt = promptInput ? promptInput.value.trim() : '';
           if (!prompt) { this.toast('Enter a rule description first.', true); return; }
-          if (!this.aiApiKey) { this.toast('Set your OpenAI API key in Settings.', true); return; }
+          if (!this.aiApiKey) { this.toast('Set your Gemini API key in Settings.', true); return; }
           this.aiLoading = true;
           this.updateAIButtons();
           generateBtn.textContent = 'Generating...';
           document.getElementById('ai-error-output').style.display = 'none';
           document.getElementById('ai-explain-output').style.display = 'none';
-          this.send({ type: 'aiGenerateRule', data: { prompt: prompt, apiKey: this.aiApiKey, model: this.aiModel } });
+          
+          // Build style-aware prompt
+          const ruleStyle = this.settings.aiRuleStyle || 'balanced';
+          const stylePrefix = {
+            conservative: '[STYLE: Conservative — Generate safer, stricter, and very specific moderation rules. Prefer narrow pattern matches. Minimize false positives.] ',
+            balanced: '',
+            aggressive: '[STYLE: Aggressive — Generate broader filtering rules with stricter automated moderation actions. Prioritize catching bad content even at the cost of some false positives.] '
+          }[ruleStyle] || '';
+          
+          this.send({ type: 'aiGenerateRule', data: { 
+            prompt: stylePrefix + prompt, 
+            apiKey: this.aiApiKey, 
+            model: this.aiModel,
+            ruleStyle: ruleStyle
+          } });
         });
       }
 
@@ -1429,12 +1560,17 @@ class VigilonXApp {
         explainBtn.addEventListener('click', () => {
           this.getFreshDraftYaml();
           if (!this.currentDraftYaml.trim()) { this.toast('No draft to explain. Load or write a config first.', true); return; }
-          if (!this.aiApiKey) { this.toast('Set your OpenAI API key in Settings.', true); return; }
+          if (!this.aiApiKey) { this.toast('Set your Gemini API key in Settings.', true); return; }
           this.aiLoading = true;
           this.updateAIButtons();
           explainBtn.textContent = 'Analyzing...';
           document.getElementById('ai-error-output').style.display = 'none';
-          this.send({ type: 'aiExplainDraft', data: { configYaml: this.currentDraftYaml, apiKey: this.aiApiKey, model: this.aiModel } });
+          this.send({ type: 'aiExplainDraft', data: { 
+            configYaml: this.currentDraftYaml, 
+            apiKey: this.aiApiKey, 
+            model: this.aiModel,
+            ruleStyle: this.settings.aiRuleStyle || 'balanced'
+          } });
         });
       }
     } catch (e) {}
@@ -1443,7 +1579,7 @@ class VigilonXApp {
   updateAIButtons() {
     const generateBtn = document.getElementById('btn-ai-generate');
     const explainBtn = document.getElementById('btn-ai-explain');
-    const canUse = this.aiEnabled && !!this.aiApiKey && !this.aiLoading;
+    const canUse = this.aiEnabled && !!this.aiApiKey && !this.aiLoading && !this.aiCooldown;
     if (generateBtn) {
       generateBtn.disabled = !canUse;
       if (!this.aiLoading) generateBtn.textContent = 'Generate Rule';

@@ -71,43 +71,46 @@ function evaluateRule(parsed, item, ruleIndex) {
     }
   }
 
+  // --- Author block mapping ---
+  const authorBlock = parsed.author || {};
+
   // --- Account age ---
-  for (const op of ['<', '>', '<=', '>=']) {
-    const key = `account_age ${op}`;
-    if (parsed[key] !== undefined) {
-      hasCondition = true;
-      const threshold = parseDuration(parsed[key]);
+  const rawAge = authorBlock.account_age !== undefined ? authorBlock.account_age : parsed.account_age;
+  if (rawAge !== undefined) {
+    hasCondition = true;
+    const opMatch = String(rawAge).trim().match(/^(<|>|<=|>=)\s*(.+)$/);
+    if (opMatch) {
+      const op = opMatch[1];
+      const threshold = parseDuration(opMatch[2]);
       if (compareOp(item.authorAccountAgeDays, op, threshold)) {
-        matchedChecks.push(`account_age ${op} ${parsed[key]}`);
+        matchedChecks.push(`author.account_age ${op} ${opMatch[2]}`);
+      } else { allMatch = false; }
+    } else {
+      const threshold = parseDuration(rawAge);
+      if (item.authorAccountAgeDays < threshold) {
+        matchedChecks.push(`author.account_age < ${rawAge}`);
       } else { allMatch = false; }
     }
-  }
-  if (parsed.account_age !== undefined) {
-    hasCondition = true;
-    // Simple numeric comparison
-    const threshold = parseDuration(parsed.account_age);
-    if (item.authorAccountAgeDays < threshold) {
-      matchedChecks.push(`account_age < ${parsed.account_age}`);
-    } else { allMatch = false; }
   }
 
   // --- Karma checks ---
   for (const karmaKey of ['post_karma', 'comment_karma', 'combined_karma']) {
-    for (const op of ['<', '>', '<=', '>=']) {
-      const key = `${karmaKey} ${op}`;
-      if (parsed[key] !== undefined) {
-        hasCondition = true;
-        const threshold = Number(parsed[key]);
+    const rawKarma = authorBlock[karmaKey] !== undefined ? authorBlock[karmaKey] : parsed[karmaKey];
+    if (rawKarma !== undefined) {
+      hasCondition = true;
+      const opMatch = String(rawKarma).trim().match(/^(<|>|<=|>=)\s*(.+)$/);
+      if (opMatch) {
+        const op = opMatch[1];
+        const threshold = Number(opMatch[2]);
         if (compareOp(item.authorKarma, op, threshold)) {
-          matchedChecks.push(`${key} ${parsed[key]}`);
+          matchedChecks.push(`author.${karmaKey} ${op} ${opMatch[2]}`);
+        } else { allMatch = false; }
+      } else {
+        const threshold = Number(rawKarma);
+        if (item.authorKarma < threshold) {
+          matchedChecks.push(`author.${karmaKey} < ${threshold}`);
         } else { allMatch = false; }
       }
-    }
-    if (parsed[karmaKey] !== undefined && typeof parsed[karmaKey] === 'number') {
-      hasCondition = true;
-      if (item.authorKarma < parsed[karmaKey]) {
-        matchedChecks.push(`${karmaKey} < ${parsed[karmaKey]}`);
-      } else { allMatch = false; }
     }
   }
 

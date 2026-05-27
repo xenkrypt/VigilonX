@@ -175,6 +175,8 @@ select,
    ============================================================================ */
 
 .tabs {
+  position: relative;
+  z-index: 10;
   display: flex;
   gap: 0;
   background: var(--bg-glass);
@@ -1114,4 +1116,328 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
   .diff-summary-bar      { flex-wrap: wrap; }
   .statusbar             { flex-wrap: wrap; }
   .training-indicator    { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab .tab-tooltip      { display: none !important; }
+}
+
+/* ============================================================================
+   UI DENSITY — Compact / Comfortable / Expanded
+   Applied via data-density attribute on <html>
+   ============================================================================ */
+
+/* ---- COMPACT ---- */
+[data-density="compact"] .content   { padding: 8px; }
+[data-density="compact"] .card      { padding: 10px; margin-bottom: 6px; }
+[data-density="compact"] .card-head { margin-bottom: 6px; }
+[data-density="compact"] .card-head h3 { font-size: 13px; }
+[data-density="compact"] .header    { padding: 6px 12px; }
+[data-density="compact"] .tab       { padding: 8px 10px; font-size: 12px; }
+[data-density="compact"] .tab svg   { width: 12px; height: 12px; }
+[data-density="compact"] .form-group { margin-bottom: 6px; }
+[data-density="compact"] .form-label { font-size: 10px; margin-bottom: 2px; }
+[data-density="compact"] .label     { font-size: 10px; margin-bottom: 5px; }
+[data-density="compact"] .snap-item { padding: 6px 8px; gap: 6px; }
+[data-density="compact"] .btn       { padding: 5px 10px; font-size: 11px; }
+[data-density="compact"] .btn-sm    { padding: 3px 7px; font-size: 10px; }
+[data-density="compact"] .input,
+[data-density="compact"] .textarea,
+[data-density="compact"] select     { padding: 5px 8px; font-size: 12px; }
+[data-density="compact"] .textarea  { min-height: 160px; }
+[data-density="compact"] .textarea-lg { min-height: 240px; }
+[data-density="compact"] .stat      { padding: 5px; }
+[data-density="compact"] .stat-val  { font-size: 16px; }
+[data-density="compact"] .modal     { padding: 14px; }
+[data-density="compact"] .tpl-btn   { padding: 6px; }
+[data-density="compact"] .deploy-item { padding: 5px 8px; }
+[data-density="compact"] .statusbar { padding: 3px 12px; }
+
+/* ---- COMFORTABLE (default — no overrides needed) ---- */
+
+/* ---- EXPANDED ---- */
+[data-density="expanded"] .content   { padding: 20px; }
+[data-density="expanded"] .card      { padding: 20px; margin-bottom: 16px; border-radius: 12px; }
+[data-density="expanded"] .card-head { margin-bottom: 14px; }
+[data-density="expanded"] .card-head h3 { font-size: 16px; }
+[data-density="expanded"] .header    { padding: 14px 20px; }
+[data-density="expanded"] .tab       { padding: 14px 18px; font-size: 14px; }
+[data-density="expanded"] .tab svg   { width: 16px; height: 16px; }
+[data-density="expanded"] .form-group { margin-bottom: 14px; }
+[data-density="expanded"] .form-label { font-size: 12px; margin-bottom: 5px; }
+[data-density="expanded"] .label     { font-size: 12px; margin-bottom: 10px; }
+[data-density="expanded"] .snap-item { padding: 14px 16px; gap: 14px; }
+[data-density="expanded"] .btn       { padding: 10px 18px; font-size: 13px; }
+[data-density="expanded"] .btn-sm    { padding: 6px 12px; font-size: 12px; }
+[data-density="expanded"] .input,
+[data-density="expanded"] .textarea,
+[data-density="expanded"] select     { padding: 10px 14px; font-size: 14px; }
+[data-density="expanded"] .textarea  { min-height: 260px; }
+[data-density="expanded"] .textarea-lg { min-height: 380px; }
+[data-density="expanded"] .stat      { padding: 12px; }
+[data-density="expanded"] .stat-val  { font-size: 24px; }
+[data-density="expanded"] .modal     { padding: 28px; }
+[data-density="expanded"] .tpl-btn   { padding: 14px; }
+[data-density="expanded"] .deploy-item { padding: 12px 14px; }
+[data-density="expanded"] .statusbar { padding: 6px 20px; }
+[data-density="expanded"] .tpl-grid  { gap: 10px; }
+[data-density="expanded"] .snap-list { gap: 8px; }
+[data-density="expanded"] .stats     { gap: 10px; }
+
+/* ============================================================================
+   MOTION EFFECTS — Off / Subtle / Full
+   Applied via data-motion attribute on <html>
+   ============================================================================ */
+
+/* ---- OFF — disable all transitions and animations ---- */
+[data-motion="off"] *,
+[data-motion="off"] *::before,
+[data-motion="off"] *::after {
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+}
+[data-motion="off"] .panel.active {
+  animation: none !important;
+}
+
+/* ---- SUBTLE (default — uses the existing transition values) ---- */
+
+/* ---- FULL — enhanced animations ---- */
+[data-motion="full"] .btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--shadow), 0 0 12px var(--accent-glow);
+}
+
+[data-motion="full"] .card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--glow), 0 4px 20px rgba(0,0,0,0.3);
+}
+
+[data-motion="full"] .card {
+  transition: border-color var(--t), box-shadow var(--t), transform var(--t);
+}
+
+[data-motion="full"] .snap-item:hover {
+  transform: translateX(3px);
+}
+
+[data-motion="full"] .snap-item {
+  transition: all var(--t);
+}
+
+[data-motion="full"] .tpl-btn:hover {
+  transform: translateY(-3px) scale(1.01);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
+
+[data-motion="full"] .tab:hover {
+  transform: translateY(-1px);
+}
+
+[data-motion="full"] .tab {
+  transition: color var(--t), transform var(--t);
+}
+
+[data-motion="full"] .panel.active {
+  animation: slideUpFull 350ms cubic-bezier(.34,1.56,.64,1);
+}
+
+@keyframes slideUpFull {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+[data-motion="full"] .badge {
+  transition: transform var(--t-fast), box-shadow var(--t-fast);
+}
+
+[data-motion="full"] .badge:hover {
+  transform: scale(1.08);
+}
+
+[data-motion="full"] .toast {
+  animation: toastInFull 400ms cubic-bezier(.34,1.56,.64,1);
+}
+
+@keyframes toastInFull {
+  from { opacity: 0; transform: translateX(60px) scale(0.85) rotateZ(2deg); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ============================================================================
+   TAB TOOLTIPS (styled, not native title)
+   ============================================================================ */
+
+.tab {
+  position: relative;
+}
+
+.tab .tab-tooltip {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-1);
+  z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  transition: opacity var(--t), transform var(--t);
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.tab .tab-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-bottom-color: var(--border);
+}
+
+.tab:hover .tab-tooltip {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ============================================================================
+   FREEZE CONFIRMATION MODAL
+   ============================================================================ */
+
+.freeze-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(6px);
+  align-items: center;
+  justify-content: center;
+}
+
+.freeze-modal-overlay.active {
+  display: flex;
+  animation: fadeIn 150ms ease;
+}
+
+.freeze-modal {
+  background: var(--bg-1);
+  border: 2px solid var(--danger);
+  border-radius: 14px;
+  padding: 24px;
+  max-width: 420px;
+  width: 92%;
+  box-shadow: 0 0 40px rgba(248,113,113,0.2), 0 16px 48px rgba(0,0,0,0.5);
+  animation: modalSlide 200ms cubic-bezier(.4,0,.2,1);
+}
+
+.freeze-modal h2 {
+  font-family: var(--font-head);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--danger);
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.freeze-modal h2 svg { width: 20px; height: 20px; }
+
+.freeze-modal p {
+  font-size: 13px;
+  color: var(--text-1);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.freeze-code-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--danger);
+  user-select: none;
+}
+
+.freeze-code-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-0);
+  color: var(--text-0);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  text-align: center;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  transition: border-color var(--t);
+}
+
+.freeze-code-input:focus {
+  outline: none;
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(248,113,113,0.2);
+}
+
+.freeze-code-input.error {
+  border-color: var(--danger);
+  animation: shake 400ms ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.freeze-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* Safety profile badge in statusbar */
+.safety-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.safety-badge.relaxed  { background: rgba(74,222,128,0.1); color: var(--green); }
+.safety-badge.standard { background: var(--accent-subtle); color: var(--accent); }
+.safety-badge.strict   { background: var(--yellow-subtle); color: var(--yellow); }
+.safety-badge.readonly { background: var(--red-subtle); color: var(--red); }
+.safety-badge.frozen   { background: var(--red-subtle); color: var(--red); animation: frozenPulse 1.5s ease-in-out infinite; }
+
+@keyframes frozenPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }

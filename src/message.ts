@@ -164,32 +164,6 @@ export type PatternParam = {
   max?: number;
 };
 
-/** A change proposal for collaborative review. */
-export type Proposal = {
-  id: string;
-  title: string;
-  description: string;
-  rationale: string;
-  riskLevel: 'low' | 'medium' | 'high';
-  configYaml: string;
-  author: string;
-  timestamp: string;
-  status: 'draft' | 'proposed' | 'under_review' | 'approved' | 'rejected' | 'deployed' | 'archived';
-  approvals: string[];       // Usernames who approved
-  comments: ProposalComment[];
-  checklist?: {
-    affectsModActions: boolean;
-    interactsWithBots: boolean;
-  };
-};
-
-export type ProposalComment = {
-  id: string;
-  author: string;
-  timestamp: string;
-  text: string;
-};
-
 /** Rule-level diff result. */
 export type RuleDiff = {
   type: 'added' | 'removed' | 'modified' | 'moved' | 'unchanged';
@@ -282,13 +256,6 @@ export type WebViewMessage =
   // Settings
   | { type: 'getSettings' }
   | { type: 'updateSettings'; data: { settings: AppSettings } }
-  // Proposals
-  | { type: 'listProposals' }
-  | { type: 'createProposal'; data: { title: string; description: string; rationale: string; riskLevel: 'low' | 'medium' | 'high'; configYaml: string } }
-  | { type: 'approveProposal'; data: { proposalId: string } }
-  | { type: 'rejectProposal'; data: { proposalId: string } }
-  | { type: 'addProposalComment'; data: { proposalId: string; text: string } }
-  | { type: 'deployProposal'; data: { proposalId: string } }
   // Community patterns
   | { type: 'listCommunityPatterns' }
   | { type: 'saveCommunityPattern'; data: { name: string; description: string; category: string; yaml: string } }
@@ -320,7 +287,7 @@ export type DevvitMessage =
       snapshots: Snapshot[]; 
       deployEvents: DeployEvent[];
       settings: AppSettings;
-      proposals: Proposal[];
+
       patterns: Pattern[];
       permissions: UserPermissions;
       auditEntries: AuditEntry[];
@@ -341,9 +308,6 @@ export type DevvitMessage =
   | { type: 'recentPostsResult'; data: { posts: Array<{ title: string; body: string; domain: string; authorName: string }> } }
   | { type: 'settingsResult'; data: { settings: AppSettings } }
   | { type: 'settingsUpdated'; data: { settings: AppSettings } }
-  | { type: 'proposalListResult'; data: { proposals: Proposal[] } }
-  | { type: 'proposalCreated'; data: { proposal: Proposal } }
-  | { type: 'proposalUpdated'; data: { proposal: Proposal } }
   | { type: 'communityPatternsResult'; data: { patterns: Pattern[] } }
   | { type: 'communityPatternSaved'; data: { pattern: Pattern } }
   | { type: 'communityPatternDeleted'; data: { patternId: string } }
