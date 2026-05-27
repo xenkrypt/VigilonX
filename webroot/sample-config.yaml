@@ -1,0 +1,117 @@
+# VigilonX Sample AutoModerator Configuration
+# Use this to test validation, guardrails, tester, and health scoring.
+# Contains a mix of good rules, edge cases, and one intentionally problematic rule.
+
+---
+# Rule 1: New Account Gate (GOOD — age + karma gating)
+type: any
+author:
+    account_age: "< 7 days"
+    satisfy_any_threshold: true
+    combined_karma: "< 10"
+action: filter
+action_reason: "New account (age < 7 days, karma < 10)"
+comment: "Your post has been filtered for review because your account is new. A moderator will review it shortly."
+moderators_exempt: true
+
+---
+# Rule 2: Suspicious Link Filter (GOOD — domain blocking)
+type: submission
+domain (includes):
+    - bit.ly
+    - goo.gl
+    - t.co
+    - tinyurl.com
+    - adf.ly
+action: remove
+action_reason: "Suspicious URL shortener domain"
+comment: "Your post was removed because it contains a link to a URL shortener. Please resubmit with the direct link."
+moderators_exempt: true
+
+---
+# Rule 3: Title Quality Gate (GOOD — regex title length)
+type: submission
+title (regex): "^.{0,10}$"
+action: remove
+action_reason: "Title too short"
+comment: "Your post title is too short (minimum 10 characters). Please resubmit with a more descriptive title."
+
+---
+# Rule 4: ALL CAPS Title Filter (GOOD)
+type: submission
+title (regex): "^[^a-z]{15,}$"
+action: remove
+action_reason: "ALL CAPS title"
+comment: "Please avoid ALL CAPS titles. Resubmit with normal capitalization."
+
+---
+# Rule 5: Keyword Spam Detector (GOOD — includes-word)
+type: any
+title+body (includes-word):
+    - free bitcoin
+    - claim your prize
+    - act now
+    - limited offer
+    - dm me for details
+action: spam
+action_reason: "Spam keyword detected"
+moderators_exempt: true
+
+---
+# Rule 6: Self-Promotion from New Accounts (GOOD)
+type: submission
+is_self: false
+author:
+    account_age: "< 30 days"
+action: filter
+action_reason: "Potential self-promotion from new account"
+report_reason: "New account link post — possible self-promotion"
+
+---
+# Rule 7: FAQ Auto-Reply (GOOD — stickied comment)
+type: submission
+title (includes-word):
+    - help
+    - getting started
+    - new here
+    - faq
+comment_stickied: true
+comment: |
+    Welcome! Before posting, please check our:
+    - [Wiki](https://www.reddit.com/r/SUBREDDIT/wiki/)
+    - [FAQ](https://www.reddit.com/r/SUBREDDIT/wiki/faq)
+    - [Rules](https://www.reddit.com/r/SUBREDDIT/about/rules/)
+
+---
+# Rule 8: Low Karma Gate (GOOD)
+type: any
+author:
+    combined_karma: "< 0"
+action: filter
+action_reason: "Negative karma account"
+modmail: "Negative karma post filtered from {{author}}. Please review."
+
+---
+# Rule 9: INTENTIONALLY PROBLEMATIC — Guardrails should catch this
+# Issues: overly broad regex, moderators_exempt: false, no action_reason
+type: any
+title (regex): ".*"
+action: remove
+moderators_exempt: false
+
+---
+# Rule 10: Flair Enforcement (GOOD)
+type: submission
+~flair_text (regex): ".+"
+action: remove
+action_reason: "Missing flair"
+comment: "Your post has been removed because it is not flaired. Please add a flair and resubmit."
+
+---
+# Rule 11: Report-only rule for monitoring (GOOD)
+type: submission
+domain (includes):
+    - youtube.com
+    - youtu.be
+action: report
+report_reason: "YouTube link — check for self-promotion"

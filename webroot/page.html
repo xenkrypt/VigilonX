@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VigilonX - Safe AutoModerator Operations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header class="header">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+    <span class="header-title">VigilonX</span>
+    <div class="header-right" style="display:flex; align-items:center; gap:8px;">
+      <button class="btn btn-sm btn-red" id="btn-emergency-brake" title="Emergency Brake" style="display:none; padding:4px 8px; font-weight:bold;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="15" y1="9" x2="9" y2="15"/>
+          <line x1="9" y1="9" x2="15" y2="15"/>
+        </svg>
+        BRAKE
+      </button>
+      <span class="badge badge-yellow" id="mode-badge" style="font-size:10px;">SAFE</span>
+      <span class="badge badge-green" id="header-status">Connected</span>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <nav class="tabs">
+    <button class="tab active" data-tab="versions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
+      Versions
+    </button>
+    <button class="tab" data-tab="draft">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Draft &amp; Validate
+    </button>
+    <button class="tab" data-tab="tester">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      Rule Tester
+    </button>
+    <button class="tab" data-tab="patterns">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Patterns
+    </button>
+    <button class="tab" data-tab="health">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      Health
+    </button>
+    <button class="tab" data-tab="proposals">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+      Proposals
+    </button>
+    <button class="tab" data-tab="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </button>
+  </nav>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- Config Freeze Banner (hidden by default) -->
+    <div id="freeze-banner" class="system-banner danger" style="display:none;">
+      <div class="system-banner-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        CONFIG FREEZE ACTIVE
+      </div>
+      <div class="system-banner-body">All live deployments are currently locked. Disable freeze in Settings to resume.</div>
+    </div>
+
+    <!-- ===== VERSIONS ===== -->
+    <div class="panel active" id="panel-versions">
+
+      <!-- Wiki Conflict Banner -->
+      <div id="conflict-banner" class="conflict-banner" style="display:none; background:var(--yellow-dim); border-color:var(--yellow); color:var(--text-1); margin-bottom:1rem;">
+        <div style="display:flex; align-items:center; gap:0.5rem; font-weight:600; margin-bottom:0.5rem; color:var(--yellow);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Wiki Conflict Detected
+        </div>
+        <p style="margin:0 0 0.5rem; font-size:0.875rem;">The live AutoModerator config was edited externally (e.g., via Reddit Mobile or Old Reddit) since VigilonX last synced.</p>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn btn-sm" id="btn-pull-diff">Pull &amp; Diff</button>
+          <button class="btn btn-sm btn-red" id="btn-force-sync">Force Sync (Acknowledge)</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <h3>Active Configuration</h3>
+          <span class="info-tip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span class="tip-text">The currently live AutoModerator YAML running on your subreddit. Snapshot it before making changes.</span>
+          </span>
+          <span class="right"><span class="badge badge-green">LIVE</span></span>
+        </div>
+        <div id="active-config-preview" class="config-view" style="max-height:120px;">Loading...</div>
+        <div class="btn-group" style="margin-top:8px;">
+          <button class="btn btn-sm" id="btn-snapshot-now">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Snapshot
+          </button>
+          <button class="btn btn-sm" id="btn-copy-active">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copy
+          </button>
+          <button class="btn btn-sm" id="btn-load-into-draft">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit as Draft
+          </button>
+        </div>
+      </div>
+
+      <div class="label">Snapshot History</div>
+      <div id="snapshot-list" class="snap-list"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+
+      <div class="label" style="margin-top:14px;">Deploy History</div>
+      <div id="deploy-list" class="deploy-list"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+
+    </div>
+
+    <!-- ===== DRAFT ===== -->
+    <div class="panel" id="panel-draft">
+      <div class="card">
+        <div class="card-head">
+          <h3>Draft Source</h3>
+          <span class="info-tip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span class="tip-text">Load an existing config or start from scratch. Changes here won't go live until you deploy.</span>
+          </span>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Load from</label>
+            <select id="draft-source" class="input">
+              <option value="active">Active config</option>
+              <option value="snapshot">From snapshot</option>
+              <option value="empty">Empty</option>
+            </select>
+          </div>
+          <div class="form-group" id="draft-snapshot-selector-group" style="display:none;">
+            <label class="form-label">Select Snapshot</label>
+            <select id="draft-snapshot-select" class="input"></select>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-primary" id="btn-load-draft" style="margin-top:6px;">Load</button>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>YAML Editor</h3>
+          <span class="info-tip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span class="tip-text">Edit AutoMod rules in YAML. Validation runs automatically. Use Tab for indentation. Deploy only when valid.</span>
+          </span>
+          <span class="right" style="font-size:11px;color:var(--text-3);" id="draft-source-label">No draft loaded</span>
+        </div>
+        <textarea id="yaml-editor" class="textarea textarea-lg" placeholder="# AutoModerator configuration&#10;---&#10;type: submission&#10;title (includes): [&quot;spam&quot;]&#10;action: remove"></textarea>
+        <div class="stats">
+          <div class="stat"><div class="stat-val" id="draft-lines">0</div><div class="stat-lbl">Lines</div></div>
+          <div class="stat"><div class="stat-val" id="draft-chars">0</div><div class="stat-lbl">Chars</div></div>
+          <div class="stat"><div class="stat-val" id="draft-rules">0</div><div class="stat-lbl">Rules</div></div>
+        </div>
+      </div>
+
+      <div class="vld-panel" id="validation-panel">
+        <div class="vld-header">
+          <span class="vld-status" id="validation-status">Not validated</span>
+          <div style="margin-left:auto;"><button class="btn btn-sm" id="btn-validate">Validate</button></div>
+        </div>
+        <ul class="vld-list" id="validation-list"></ul>
+      </div>
+
+      <div style="margin-top:14px;display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-green" id="btn-deploy" disabled>Deploy to Live</button>
+        <span style="font-size:11px;color:var(--text-3);" id="deploy-hint">Validate your draft first.</span>
+      </div>
+    </div>
+
+    <!-- ===== TESTER ===== -->
+    <div class="panel" id="panel-tester">
+      <div class="card">
+        <div class="card-head">
+          <h3>Rule Tester</h3>
+          <span class="info-tip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span class="tip-text">Simulate how your rules will react to posts. Uses your draft (or active config if no draft loaded).</span>
+          </span>
+          <span class="right" style="font-size:11px;color:var(--text-3);" id="tester-source-label">Testing against current draft</span>
+        </div>
+        <div class="label">Quick Templates</div>
+        <div class="tpl-grid">
+          <button class="tpl-btn" data-template="spam-link"><strong>Link Spam</strong><span>New account, suspicious link</span></button>
+          <button class="tpl-btn" data-template="quality-post"><strong>Quality Post</strong><span>Established user, self post</span></button>
+          <button class="tpl-btn" data-template="new-user"><strong>New User</strong><span>Account &lt; 1 day old</span></button>
+          <button class="tpl-btn" data-template="low-karma"><strong>Low Karma</strong><span>Negative karma account</span></button>
+        </div>
+        <div class="label">Test Input</div>
+        <div class="form-group"><label class="form-label">Title</label><input type="text" class="input" id="test-title" placeholder="Post title" /></div>
+        <div class="form-group"><label class="form-label">Body</label><textarea class="textarea" id="test-body" style="min-height:60px;" placeholder="Post body"></textarea></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Domain</label><input type="text" class="input" id="test-domain" placeholder="example.com" /></div>
+          <div class="form-group"><label class="form-label">Author</label><input type="text" class="input" id="test-author" placeholder="username" /></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Account Age (days)</label><input type="number" class="input" id="test-age" value="30" min="0" /></div>
+          <div class="form-group"><label class="form-label">Karma</label><input type="number" class="input" id="test-karma" value="100" /></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Flair</label><input type="text" class="input" id="test-flair" placeholder="Discussion" /></div>
+          <div class="form-group form-inline" style="padding-top:18px;"><input type="checkbox" id="test-self" checked /><label for="test-self" style="font-size:12px;color:var(--text-1);">Self post</label></div>
+        </div>
+        <button class="btn btn-primary" id="btn-run-test" style="margin-top:8px;">Run Test</button>
+      </div>
+      <div class="label" style="margin-top:10px;">Results</div>
+      <div id="test-results">
+        <div class="empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <span class="title">No test run yet</span>
+          <span class="desc">Configure a test item and click Run Test</span>
+        </div>
+      </div>
+      <div class="disclaimer">Simulation is approximate — based on public AutoModerator docs. Always test critical changes in a sandbox subreddit.</div>
+    </div>
+
+    <!-- ===== PATTERNS ===== -->
+    <div class="panel" id="panel-patterns">
+      <div class="card">
+        <div class="card-head">
+          <h3>Pattern Library</h3>
+          <span class="info-tip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span class="tip-text">Pre-built AutoMod rule templates. Click "Use Pattern" to configure and insert into your draft.</span>
+          </span>
+        </div>
+        <div class="label">Category Filter</div>
+        <div class="btn-group" style="margin-bottom:10px;">
+          <button class="btn btn-sm pat-filter active" data-cat="all">All</button>
+          <button class="btn btn-sm pat-filter" data-cat="spam">Spam</button>
+          <button class="btn btn-sm pat-filter" data-cat="quality">Quality</button>
+          <button class="btn btn-sm pat-filter" data-cat="gating">Gating</button>
+          <button class="btn btn-sm pat-filter" data-cat="reply">Reply</button>
+        </div>
+        <div id="pattern-list" class="pattern-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Training Missions</h3></div>
+        <p style="font-size:12px;color:var(--text-1);margin-bottom:10px;">Learn AutoMod by fixing broken configs. Great for new moderators.</p>
+        <div id="training-list"></div>
+      </div>
+    </div>
+
+    <!-- ===== HEALTH ===== -->
+    <div class="panel" id="panel-health">
+      <div class="card">
+        <div class="card-head">
+          <h3>Config Health Score</h3>
+          <span class="info-tip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span class="tip-text">Overall health grade based on validation, safety, documentation, and structure.</span>
+          </span>
+        </div>
+        <div id="health-display"><div class="empty"><span class="title">Load a config to see health</span></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Guardrails &amp; Best Practices</h3></div>
+        <p style="font-size:12px;color:var(--text-1);margin-bottom:10px;">Common mistakes detected from r/AutoModerator best practices.</p>
+        <div id="guardrails-display"><div class="empty"><span class="title">Load a config to run checks</span></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Diff Viewer</h3></div>
+        <div class="form-row" style="margin-bottom:8px;">
+          <div class="form-group"><label class="form-label">Compare A</label><select id="diff-a" class="input"><option value="active">Active Config</option></select></div>
+          <div class="form-group"><label class="form-label">Compare B</label><select id="diff-b" class="input"><option value="draft">Current Draft</option><option value="active">Active Config</option></select></div>
+        </div>
+        <button class="btn btn-sm btn-primary" id="btn-run-diff">Compare</button>
+        <div id="diff-display" style="margin-top:10px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h3>Audit Trail</h3>
+          <button class="btn btn-sm" id="btn-export-audit">Export JSON</button>
+        </div>
+        <div id="audit-display"><div class="empty"><span class="title">No audit entries yet</span></div></div>
+      </div>
+    </div>
+
+    <!-- ===== PROPOSALS ===== -->
+    <div class="panel" id="panel-proposals">
+      <div class="card">
+        <div class="card-head">
+          <h3>Change Proposals</h3>
+          <span class="info-tip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span class="tip-text">Submit config changes for team review before deploying.</span>
+          </span>
+          <button class="btn btn-sm btn-primary" id="btn-new-proposal" style="margin-left:auto;">New Proposal</button>
+        </div>
+        <div id="proposal-list"><div class="empty"><span class="title">No proposals yet</span><span class="desc">Create a proposal from your draft config</span></div></div>
+      </div>
+    </div>
+
+    <!-- ===== SETTINGS ===== -->
+    <div class="panel" id="panel-settings">
+      <div class="card">
+        <div class="card-head"><h3>Operational Safety Settings</h3></div>
+
+        <div class="form-group">
+          <label class="form-label">Operating Mode</label>
+          <select class="input" id="set-operating-mode" style="width:100%;">
+            <option value="safe">Safe Mode (Read-Only live, Sandbox deploys only)</option>
+            <option value="standard">Standard Mode (Live deploys enabled, Snapshots required)</option>
+            <option value="power">Power Mode (Cross-sub bundles enabled, UI warnings reduced)</option>
+          </select>
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px;">Controls the overall functionality and safety restrictions of VigilonX.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Approval Governance</label>
+          <div class="form-inline"><input type="checkbox" id="set-require-approvals" /><label for="set-require-approvals" style="font-size:12px;color:var(--text-1);">Require peer approvals for live deploys</label></div>
+          <div class="form-inline" style="margin-top:4px;"><label style="font-size:11px;color:var(--text-2);margin-right:6px;">Required approvals:</label><input type="number" class="input" id="set-approval-count" value="1" min="1" max="10" style="width:60px;" /></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Sandbox Subreddits</label>
+          <input type="text" class="input" id="set-sandbox-subs" placeholder="r/MySubTest, r/AnotherTest" />
+          <span style="font-size:11px;color:var(--text-3);">Comma-separated list of subreddits to use for dry-run testing.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Policy Rules (Deployment Gates)</label>
+          <div class="form-inline"><input type="checkbox" id="set-policy-deep-validate" /><label for="set-policy-deep-validate" style="font-size:12px;color:var(--text-1);">Require Deep Validate before live deploy</label></div>
+          <div class="form-inline" style="margin-top:4px;"><input type="checkbox" id="set-policy-sandbox" /><label for="set-policy-sandbox" style="font-size:12px;color:var(--text-1);">Require Sandbox Deploy before live deploy</label></div>
+          <div class="form-inline" style="margin-top:4px;"><input type="checkbox" id="set-policy-milestone" /><label for="set-policy-milestone" style="font-size:12px;color:var(--text-1);">Require at least 1 Milestone snapshot in history</label></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Emergency Controls</label>
+          <div class="form-inline"><input type="checkbox" id="set-config-freeze" /><label for="set-config-freeze" style="font-size:12px;font-weight:bold;color:var(--danger);">Enable Config Freeze (Locks all live deployments)</label></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Ecosystem Awareness</label>
+          <div class="form-inline"><input type="checkbox" id="set-ecosystem-ai" /><label for="set-ecosystem-ai" style="font-size:12px;color:var(--text-1);">Support AI Automod interop tags</label></div>
+          <div class="form-inline" style="margin-top:4px;"><input type="checkbox" id="set-ecosystem-sync" /><label for="set-ecosystem-sync" style="font-size:12px;color:var(--text-1);">Sync with Mirror Automod</label></div>
+        </div>
+
+        <button class="btn btn-primary" id="btn-save-settings" style="margin-top:8px;">Save Settings</button>
+      </div>
+    </div>
+
+  </div><!-- /.content -->
+
+  <!-- Status Bar -->
+  <div class="statusbar">
+    <span class="dot" id="status-dot"></span>
+    <span id="status-text">Connecting</span>
+    <span class="training-indicator" id="training-indicator" style="display:none;"></span>
+    <span style="margin-left:auto;" id="status-user"></span>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ===== MODALS ===== -->
+<div class="modal-bg" id="modal-deploy">
+  <div class="modal">
+    <h2>Deploy Configuration</h2>
+    <p>This will replace the current live AutoModerator configuration with your draft.</p>
+    <ul class="modal-checks">
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Validation passed</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Current config will be snapshotted</li>
+      <li id="modal-deploy-test-status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.3"><rect x="3" y="3" width="18" height="18" rx="2"/></svg> Rule tests run (optional)</li>
+    </ul>
+    <div class="form-group"><label class="form-label">Deploy note</label><input type="text" class="input" id="deploy-note" placeholder="Describe changes" /></div>
+    <div class="modal-foot">
+      <button class="btn" id="btn-cancel-deploy">Cancel</button>
+      <button class="btn btn-green" id="btn-confirm-deploy">Confirm Deploy</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-rollback">
+  <div class="modal">
+    <h2>Rollback Configuration</h2>
+    <p id="rollback-body">Restore a previous configuration.</p>
+    <ul class="modal-checks">
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Current config will be snapshotted first</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Selected snapshot becomes active</li>
+    </ul>
+    <div class="form-group"><label class="form-label">Rollback note</label><input type="text" class="input" id="rollback-note" placeholder="Reason" /></div>
+    <div class="modal-foot">
+      <button class="btn" id="btn-cancel-rollback">Cancel</button>
+      <button class="btn btn-red" id="btn-confirm-rollback">Confirm Rollback</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-snapshot-view">
+  <div class="modal" style="max-width:600px;">
+    <h2 id="snapshot-view-title">Snapshot</h2>
+    <p id="snapshot-view-meta"></p>
+    <div class="config-view" id="snapshot-view-content" style="max-height:300px;"></div>
+    <div class="modal-foot">
+      <button class="btn" id="btn-close-snapshot-view">Close</button>
+      <button class="btn btn-sm btn-primary" id="btn-snapshot-to-draft">Load into Draft</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-proposal-create">
+  <div class="modal">
+    <h2>Create Proposal</h2>
+    <p>Submit your current draft for review.</p>
+    <div class="form-group"><label class="form-label">Title</label><input type="text" class="input" id="prop-title" placeholder="e.g., Update Spam Filters" /></div>
+    <div class="form-group"><label class="form-label">Description / Rationale</label><textarea class="textarea" id="prop-note" style="min-height:60px;" placeholder="What does this do and why are we making this change?"></textarea></div>
+    <div style="margin-top:12px; margin-bottom:12px;">
+      <label class="form-label">Risk Assessment Checklist</label>
+      <div class="form-inline" style="margin-bottom:4px;"><input type="checkbox" id="prop-chk-mod" /><label for="prop-chk-mod" style="font-size:12px;">Affects moderator actions (e.g. approve/remove)</label></div>
+      <div class="form-inline"><input type="checkbox" id="prop-chk-bot" /><label for="prop-chk-bot" style="font-size:12px;">Interacts with or triggers other bots</label></div>
+    </div>
+    <input type="hidden" id="prop-desc" />
+    <div class="form-group">
+      <label class="form-label">Risk Level</label>
+      <select id="prop-risk" class="input"><option value="low">Low Risk</option><option value="medium">Medium Risk</option><option value="high">High Risk</option></select>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="btn-cancel-prop">Cancel</button>
+      <button class="btn btn-primary" id="btn-confirm-prop">Submit Proposal</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-snapshot-note">
+  <div class="modal">
+    <h2>Create Snapshot</h2>
+    <p>Save a snapshot of the current live config.</p>
+    <div class="form-group"><label class="form-label">Note</label><input type="text" class="input" id="snapshot-note-input" placeholder="Describe this snapshot" /></div>
+    <div class="form-group">
+      <label class="form-label">Tier</label>
+      <select id="snapshot-tier-input" class="input">
+        <option value="manual">Manual (Standard)</option>
+        <option value="milestone">Milestone (Pinned)</option>
+      </select>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="btn-cancel-snapshot">Cancel</button>
+      <button class="btn btn-primary" id="btn-confirm-snapshot">Create Snapshot</button>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="yaml-parser.js"></script>
+<script src="validation.js"></script>
+<script src="rule-tester.js"></script>
+<script src="diff-engine.js"></script>
+<script src="pattern-library.js"></script>
+<script src="health-score.js"></script>
+<script src="guardrails.js"></script>
+<script src="training.js"></script>
+<script src="script.js"></script>
+
+</body>
+</html>
