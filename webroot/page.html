@@ -153,6 +153,26 @@
         <button class="btn btn-sm btn-primary" id="btn-load-draft" style="margin-top:6px;">Load</button>
       </div>
 
+      <div id="ai-assist-section" class="card" style="display:none;">
+        <div class="card-head">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <h3>AI Assist</h3>
+          <span class="info-tip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span class="tip-text">Describe a moderation rule in plain English. AI will generate valid AutoMod YAML that goes through your normal validation pipeline.</span>
+          </span>
+        </div>
+        <div class="form-group" style="margin-bottom:8px;">
+          <input type="text" class="input" id="ai-prompt-input" placeholder="Filter posts from accounts younger than 3 days..." />
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-sm btn-primary" id="btn-ai-generate" disabled>Generate Rule</button>
+          <button class="btn btn-sm" id="btn-ai-explain" disabled>Explain Current Draft</button>
+        </div>
+        <div id="ai-explain-output" style="display:none; margin-top:10px; padding:10px; background:var(--bg-glass); border:1px solid var(--bg-glass-border); border-radius:var(--radius-sm); font-size:12px; color:var(--text-1); max-height:200px; overflow-y:auto; white-space:pre-wrap;"></div>
+        <div id="ai-error-output" style="display:none; margin-top:8px; font-size:11px; color:var(--red);"></div>
+      </div>
+
       <div class="card">
         <div class="card-head">
           <h3>YAML Editor</h3>
@@ -350,6 +370,26 @@
           <label class="form-label">Ecosystem Awareness</label>
           <div class="form-inline"><input type="checkbox" id="set-ecosystem-ai" /><label for="set-ecosystem-ai" style="font-size:12px;color:var(--text-1);">Support AI Automod interop tags</label></div>
           <div class="form-inline" style="margin-top:4px;"><input type="checkbox" id="set-ecosystem-sync" /><label for="set-ecosystem-sync" style="font-size:12px;color:var(--text-1);">Sync with Mirror Automod</label></div>
+        </div>
+
+        <div class="form-group" style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+          <label class="form-label">AI Assistance</label>
+          <div class="form-inline"><input type="checkbox" id="set-ai-enabled" /><label for="set-ai-enabled" style="font-size:12px;color:var(--text-1);">Enable AI Assistance</label></div>
+        </div>
+
+        <div id="ai-settings-group" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Google Gemini API Key</label>
+            <input type="password" class="input" id="set-ai-api-key" placeholder="AIza..." autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Model</label>
+            <select id="set-ai-model" class="input">
+              <option value="gemini-2.5-flash">gemini-2.5-flash (Fast, Low Cost)</option>
+              <option value="gemini-2.5-pro">gemini-2.5-pro (Most Capable)</option>
+            </select>
+          </div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px;margin-bottom:8px;">API keys are session-only and are never permanently stored.</div>
         </div>
 
         <button class="btn btn-primary" id="btn-save-settings" style="margin-top:8px;">Save Settings</button>

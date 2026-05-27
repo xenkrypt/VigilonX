@@ -30,6 +30,7 @@ import type {
 Devvit.configure({
   redditAPI: true,
   redis: true,
+  http: true,
 });
 
 // ---------------------------------------------------------------------------
@@ -1382,6 +1383,138 @@ Devvit.addCustomPostType({
               const csPerms = await checkPermissions(context);
               if (!csPerms.canEdit) { webView.postMessage({ type: 'error', data: { message: 'No permission.', context: 'confirmStagedDeploy' } }); break; }
               webView.postMessage({ type: 'toast', data: { message: 'Staged deploy confirmed as stable.' } });
+              break;
+            }
+
+            // ----------------------------------------------------------
+            // AI Assistance — Generate Rule
+            // ----------------------------------------------------------
+            case 'aiGenerateRule': {
+              const { prompt: aiPrompt, apiKey: aiKey, model: aiModel } = message.data;
+              if (!aiKey || !aiPrompt) {
+                webView.postMessage({ type: 'aiGenerateResult', data: { yaml: '', success: false, error: 'API key and prompt are required.' } });
+                break;
+              }
+
+              const generateSystemPrompt = `You are an expert AutoModerator configuration generator for Reddit.
+
+RULES:
+- Output ONLY valid AutoModerator YAML. No markdown fences, no explanations, no commentary.
+- Every rule MUST start with --- on its own line (the YAML document separator).
+- Always include "action_reason" in every rule.
+- Default "moderators_exempt" to true unless the user explicitly asks otherwise.
+- Prefer safe defaults: use "filter" over "remove" when uncertain.
+- Avoid overly broad regex patterns (e.g. ".*" or ".+").
+- Avoid single-character string matches.
+- Use "includes-word" instead of "includes" when matching keywords to avoid substring false positives.
+- Each rule must specify a "type" (submission, comment, or any).
+- Output clean, production-ready YAML only.`;
+
+              try {
+                const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${aiModel || 'gemini-2.5-flash'}:generateContent?key=${aiKey}`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    system_instruction: { parts: [{ text: generateSystemPrompt }] },
+                    contents: [{ role: 'user', parts: [{ text: aiPrompt }] }],
+                    generationConfig: {
+                      temperature: 0.2,
+                      maxOutputTokens: 2000,
+                    }
+                  }),
+                });
+
+                if (!aiResponse.ok) {
+                  const errBody = await aiResponse.text().catch(() => '');
+                  const status = aiResponse.status;
+                  let errMsg = `Gemini API error (${status})`;
+                  if (status === 400 || status === 401 || status === 403) errMsg = 'Invalid API key or permissions. Check your Gemini API key in Settings.';
+                  else if (status === 429) errMsg = 'Rate limit or quota exceeded. Try again later.';
+                  else if (status === 500 || status === 503) errMsg = 'Gemini service temporarily unavailable.';
+                  webView.postMessage({ type: 'aiGenerateResult', data: { yaml: '', success: false, error: errMsg } });
+                  break;
+                }
+
+                const aiResult = await aiResponse.json();
+                let generatedYaml = aiResult?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+
+                // Strip markdown fences if the model added them despite instructions
+                generatedYaml = generatedYaml.replace(/^```(?:ya?ml)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+
+                if (!generatedYaml) {
+                  webView.postMessage({ type: 'aiGenerateResult', data: { yaml: '', success: false, error: 'AI returned an empty response.' } });
+                  break;
+                }
+
+                webView.postMessage({ type: 'aiGenerateResult', data: { yaml: generatedYaml, success: true } });
+              } catch (aiErr: unknown) {
+                const aiErrMsg = aiErr instanceof Error ? aiErr.message : String(aiErr);
+                const safeMsg = aiErrMsg.includes('aborted') ? 'Request timed out (25s). Try a simpler prompt.' : `AI request failed: ${aiErrMsg.substring(0, 200)}`;
+                webView.postMessage({ type: 'aiGenerateResult', data: { yaml: '', success: false, error: safeMsg } });
+              }
+              break;
+            }
+
+            // ----------------------------------------------------------
+            // AI Assistance — Explain Draft
+            // ----------------------------------------------------------
+            case 'aiExplainDraft': {
+              const { configYaml: explainYaml, apiKey: explainKey, model: explainModel } = message.data;
+              if (!explainKey || !explainYaml?.trim()) {
+                webView.postMessage({ type: 'aiExplainResult', data: { explanation: '', success: false, error: 'API key and config YAML are required.' } });
+                break;
+              }
+
+              const explainSystemPrompt = `You are an expert on Reddit's AutoModerator. The user will provide AutoModerator YAML configuration. Explain what each rule does in plain English. For each rule:
+1. Summarize its purpose in one sentence.
+2. List what it matches (type, conditions).
+3. State the action taken.
+4. Note any potential risks or issues (overly broad matching, missing fields, etc.).
+
+Be concise and practical. Use numbered rules. Do not output YAML.`;
+
+              try {
+                const exResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${explainModel || 'gemini-2.5-flash'}:generateContent?key=${explainKey}`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    system_instruction: { parts: [{ text: explainSystemPrompt }] },
+                    contents: [{ role: 'user', parts: [{ text: explainYaml }] }],
+                    generationConfig: {
+                      temperature: 0.3,
+                      maxOutputTokens: 2000,
+                    }
+                  }),
+                });
+
+                if (!exResponse.ok) {
+                  const status = exResponse.status;
+                  let errMsg = `Gemini API error (${status})`;
+                  if (status === 400 || status === 401 || status === 403) errMsg = 'Invalid API key or permissions.';
+                  else if (status === 429) errMsg = 'Rate limit or quota exceeded.';
+                  else if (status === 500 || status === 503) errMsg = 'Gemini service temporarily unavailable.';
+                  webView.postMessage({ type: 'aiExplainResult', data: { explanation: '', success: false, error: errMsg } });
+                  break;
+                }
+
+                const exResult = await exResponse.json();
+                const explanation = exResult?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+
+                if (!explanation) {
+                  webView.postMessage({ type: 'aiExplainResult', data: { explanation: '', success: false, error: 'AI returned an empty explanation.' } });
+                  break;
+                }
+
+                webView.postMessage({ type: 'aiExplainResult', data: { explanation, success: true } });
+              } catch (exErr: unknown) {
+                const exErrMsg = exErr instanceof Error ? exErr.message : String(exErr);
+                const safeMsg = exErrMsg.includes('aborted') ? 'Request timed out (25s). Try with a shorter config.' : `AI request failed: ${exErrMsg.substring(0, 200)}`;
+                webView.postMessage({ type: 'aiExplainResult', data: { explanation: '', success: false, error: safeMsg } });
+              }
               break;
             }
 

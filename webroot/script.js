@@ -26,6 +26,13 @@ class VigilonXApp {
     this.activeMission = null;
     this.subredditName = ''; // Populated from initialData, used to namespace localStorage
 
+    // AI Assistance (session-only state)
+    this.aiEnabled = false;
+    this.aiEnabled = false;
+    this.aiApiKey = '';
+    this.aiModel = 'gemini-2.5-flash';
+    this.aiLoading = false;
+
     this.bindTheme();
     this.bindTabs();
     this.bindVersionsTab();
@@ -38,6 +45,7 @@ class VigilonXApp {
     this.bindPatternsTab();
     this.bindEmergencyBrake();
     this.bindDelegatedActions();
+    this.bindAIAssist();
 
     addEventListener('message', (ev) => this.onMessage(ev));
     addEventListener('load', () => this.send({ type: 'webViewReady' }));
@@ -254,6 +262,40 @@ class VigilonXApp {
         break;
       case 'toast':
         this.toast(msg.data.message);
+        break;
+
+      // AI Assistance responses
+      case 'aiGenerateResult':
+        this.aiLoading = false;
+        this.updateAIButtons();
+        if (msg.data.success) {
+          const editor = document.getElementById('yaml-editor');
+          const existing = editor.value.trim();
+          editor.value = existing ? existing + '\n\n' + msg.data.yaml : msg.data.yaml;
+          this.currentDraftYaml = editor.value;
+          this.updateDraftInfo();
+          this.runValidation(true);
+          this.toast('AI rule generated — review and validate before deploying');
+          document.getElementById('ai-error-output').style.display = 'none';
+          document.getElementById('ai-explain-output').style.display = 'none';
+        } else {
+          document.getElementById('ai-error-output').textContent = msg.data.error || 'Generation failed';
+          document.getElementById('ai-error-output').style.display = 'block';
+        }
+        break;
+
+      case 'aiExplainResult':
+        this.aiLoading = false;
+        this.updateAIButtons();
+        if (msg.data.success) {
+          const output = document.getElementById('ai-explain-output');
+          output.textContent = msg.data.explanation;
+          output.style.display = 'block';
+          document.getElementById('ai-error-output').style.display = 'none';
+        } else {
+          document.getElementById('ai-error-output').textContent = msg.data.error || 'Explanation failed';
+          document.getElementById('ai-error-output').style.display = 'block';
+        }
         break;
     }
   }
@@ -1235,6 +1277,7 @@ class VigilonXApp {
     this.updateModeBadge();
     this.updateFreezeBanner();
     this.updateBrakeButton();
+    this.restoreAISettings();
   }
 
   updateModeBadge() {
@@ -1326,6 +1369,125 @@ class VigilonXApp {
     return text.length > max ? text.substring(0, max - 1) + '...' : text;
   }
   esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+  // ---- AI Assistance ----
+  bindAIAssist() {
+    try {
+      const enableCb = document.getElementById('set-ai-enabled');
+      const settingsGroup = document.getElementById('ai-settings-group');
+      const assistSection = document.getElementById('ai-assist-section');
+      const apiKeyInput = document.getElementById('set-ai-api-key');
+      const modelSelect = document.getElementById('set-ai-model');
+      const generateBtn = document.getElementById('btn-ai-generate');
+      const explainBtn = document.getElementById('btn-ai-explain');
+      const promptInput = document.getElementById('ai-prompt-input');
+
+      if (!enableCb || !settingsGroup || !assistSection) return;
+
+      enableCb.addEventListener('change', () => {
+        this.aiEnabled = enableCb.checked;
+        settingsGroup.style.display = this.aiEnabled ? 'block' : 'none';
+        assistSection.style.display = this.aiEnabled ? 'block' : 'none';
+        if (this.aiEnabled && apiKeyInput) {
+          this.aiApiKey = apiKeyInput.value || '';
+          this.aiModel = modelSelect ? modelSelect.value : 'gemini-2.5-flash';
+        }
+        this.saveAISettings();
+        this.updateAIButtons();
+      });
+
+      if (apiKeyInput) {
+        apiKeyInput.addEventListener('change', () => {
+          this.aiApiKey = apiKeyInput.value || '';
+          this.saveAISettings();
+          this.updateAIButtons();
+        });
+      }
+
+      if (modelSelect) {
+        modelSelect.addEventListener('change', () => {
+          this.aiModel = modelSelect.value;
+          this.saveAISettings();
+        });
+      }
+
+      if (generateBtn) {
+        generateBtn.addEventListener('click', () => {
+          const prompt = promptInput ? promptInput.value.trim() : '';
+          if (!prompt) { this.toast('Enter a rule description first.', true); return; }
+          if (!this.aiApiKey) { this.toast('Set your OpenAI API key in Settings.', true); return; }
+          this.aiLoading = true;
+          this.updateAIButtons();
+          generateBtn.textContent = 'Generating...';
+          document.getElementById('ai-error-output').style.display = 'none';
+          document.getElementById('ai-explain-output').style.display = 'none';
+          this.send({ type: 'aiGenerateRule', data: { prompt: prompt, apiKey: this.aiApiKey, model: this.aiModel } });
+        });
+      }
+
+      if (explainBtn) {
+        explainBtn.addEventListener('click', () => {
+          this.getFreshDraftYaml();
+          if (!this.currentDraftYaml.trim()) { this.toast('No draft to explain. Load or write a config first.', true); return; }
+          if (!this.aiApiKey) { this.toast('Set your OpenAI API key in Settings.', true); return; }
+          this.aiLoading = true;
+          this.updateAIButtons();
+          explainBtn.textContent = 'Analyzing...';
+          document.getElementById('ai-error-output').style.display = 'none';
+          this.send({ type: 'aiExplainDraft', data: { configYaml: this.currentDraftYaml, apiKey: this.aiApiKey, model: this.aiModel } });
+        });
+      }
+    } catch (e) {}
+  }
+
+  updateAIButtons() {
+    const generateBtn = document.getElementById('btn-ai-generate');
+    const explainBtn = document.getElementById('btn-ai-explain');
+    const canUse = this.aiEnabled && !!this.aiApiKey && !this.aiLoading;
+    if (generateBtn) {
+      generateBtn.disabled = !canUse;
+      if (!this.aiLoading) generateBtn.textContent = 'Generate Rule';
+    }
+    if (explainBtn) {
+      explainBtn.disabled = !canUse;
+      if (!this.aiLoading) explainBtn.textContent = 'Explain Current Draft';
+    }
+  }
+
+  saveAISettings() {
+    try {
+      sessionStorage.setItem('vigilonx_ai', JSON.stringify({
+        enabled: this.aiEnabled,
+        apiKey: this.aiApiKey,
+        model: this.aiModel
+      }));
+    } catch (e) {}
+  }
+
+  restoreAISettings() {
+    try {
+      const raw = sessionStorage.getItem('vigilonx_ai');
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      this.aiEnabled = !!saved.enabled;
+      this.aiApiKey = saved.apiKey || '';
+      this.aiModel = saved.model || 'gemini-2.5-flash';
+
+      const enableCb = document.getElementById('set-ai-enabled');
+      const settingsGroup = document.getElementById('ai-settings-group');
+      const assistSection = document.getElementById('ai-assist-section');
+      const apiKeyInput = document.getElementById('set-ai-api-key');
+      const modelSelect = document.getElementById('set-ai-model');
+
+      if (enableCb) enableCb.checked = this.aiEnabled;
+      if (settingsGroup) settingsGroup.style.display = this.aiEnabled ? 'block' : 'none';
+      if (assistSection) assistSection.style.display = this.aiEnabled ? 'block' : 'none';
+      if (apiKeyInput) apiKeyInput.value = this.aiApiKey;
+      if (modelSelect) modelSelect.value = this.aiModel;
+
+      this.updateAIButtons();
+    } catch (e) {}
+  }
 }
 
 const app = new VigilonXApp();

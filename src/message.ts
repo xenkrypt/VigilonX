@@ -302,7 +302,10 @@ export type WebViewMessage =
   | { type: 'deletePattern'; data: { patternId: string } }
   | { type: 'pingLease'; data: { baseRevisionId: string } }
   | { type: 'breakLease'; data: {} }
-  | { type: 'emergencyBrake' };
+  | { type: 'emergencyBrake' }
+  // AI Assistance
+  | { type: 'aiGenerateRule'; data: { prompt: string; apiKey: string; model: string } }
+  | { type: 'aiExplainDraft'; data: { configYaml: string; apiKey: string; model: string } };
 
 // ---------------------------------------------------------------------------
 // Messages from Devvit → Webview
@@ -348,7 +351,10 @@ export type DevvitMessage =
   | { type: 'ruleDocSaved'; data: { doc: RuleDoc } }
   | { type: 'auditTrailResult'; data: { entries: AuditEntry[] } }
   | { type: 'error'; data: { message: string; context?: string } }
-  | { type: 'toast'; data: { message: string; appearance?: 'success' | 'neutral' } };
+  | { type: 'toast'; data: { message: string; appearance?: 'success' | 'neutral' } }
+  // AI Assistance
+  | { type: 'aiGenerateResult'; data: { yaml: string; success: boolean; error?: string } }
+  | { type: 'aiExplainResult'; data: { explanation: string; success: boolean; error?: string } };
 
 /**
  * Wrapper type for messages received by the webview.
