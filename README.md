@@ -4,8 +4,6 @@
 
 VigilonX elevates subreddit moderation to professional infrastructure standards. By providing a unified Devvit Application interface, it brings modern software engineering paradigms—version control, deterministic offline testing, semantic validation, and incident response—directly into the moderation ecosystem.
 
----
-
 ## 📖 Overview
 
 AutoModerator is the backbone of Reddit community safety, but editing its configuration directly via plain-text wiki pages is a high-risk operation. A single malformed regex, a missing action reason, or a logical flaw can cause catastrophic, silent failures across an entire community. 
